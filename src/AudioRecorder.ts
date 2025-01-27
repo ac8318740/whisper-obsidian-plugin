@@ -302,11 +302,11 @@ export class NativeAudioRecorder implements AudioRecorder {
 
 	/**
 	 * Utility: Re-encode an AudioBuffer as a 16-bit .wav Blob.
-	 * Because we’re not using ffmpeg, we’ll produce a basic WAV format.
-	 * If you need MP3, you’d have to add a separate encoder library.
+	 * Because we're not using ffmpeg, we'll produce a basic WAV format.
+	 * If you need MP3, you'd have to add a separate encoder library.
 	 */
 	private async encodeWAV(buffer: AudioBuffer): Promise<Blob> {
-		// Adapted from typical “write WAV header” snippet
+		// Adapted from typical "write WAV header" snippet
 		const numChannels = buffer.numberOfChannels;
 		const sampleRate = buffer.sampleRate;
 		const format = 1; // PCM
@@ -314,7 +314,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 
 		// Combine channels
 		const channelData: Float32Array[] = [];
-		let length = buffer.length * numChannels * 2; // 2 bytes per sample
+		const length = buffer.length * numChannels * 2; // 2 bytes per sample
 		for (let i = 0; i < numChannels; i++) {
 			channelData.push(buffer.getChannelData(i));
 		}

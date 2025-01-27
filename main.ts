@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, Notice } from "obsidian";
 import { Timer } from "src/Timer";
 import { Controls } from "src/Controls";
 import { AudioHandler } from "src/AudioHandler";
@@ -61,8 +61,8 @@ export default class Whisper extends Plugin {
 					const extension = this.recorder.getMimeType()?.split("/")[1];
 					const fileName = generateTimestampedFileName(extension);
 
-					// Use audioBlob to send or save the recorded audio as needed
-					await this.audioHandler.sendAudioData(audioBlob, fileName);
+					// Changed from sendAudioData to processAudioChunks
+					await this.audioHandler.processAudioChunks(audioBlob, fileName);
 					this.statusBar.updateStatus(RecordingStatus.Idle);
 				}
 			},
@@ -70,6 +70,26 @@ export default class Whisper extends Plugin {
 				{
 					modifiers: ["Alt"],
 					key: "Q",
+				},
+			],
+		});
+
+		this.addCommand({
+			id: "pause-resume-recording",
+			name: "Pause/resume recording",
+			callback: async () => {
+				if (this.statusBar.status === RecordingStatus.Recording) {
+					await this.recorder.pauseRecording();
+					this.statusBar.updateStatus(RecordingStatus.Paused);
+				} else if (this.statusBar.status === RecordingStatus.Paused) {
+					await this.recorder.pauseRecording(); // This will resume since it's already paused
+					this.statusBar.updateStatus(RecordingStatus.Recording);
+				}
+			},
+			hotkeys: [
+				{
+					modifiers: ["Alt"],
+					key: "W",
 				},
 			],
 		});
@@ -89,14 +109,25 @@ export default class Whisper extends Plugin {
 					if (files && files.length > 0) {
 						const file = files[0];
 						const fileName = file.name;
-						const audioBlob = file.slice(0, file.size, file.type);
-						// Use audioBlob to send or save the uploaded audio as needed
-						await this.audioHandler.sendAudioData(audioBlob, fileName);
+						await this.audioHandler.processAudioChunks(file, fileName);
 					}
 				};
 
 				// Programmatically open the file dialog
 				fileInput.click();
+			},
+		});
+
+		// Add new command to delete all transcripts
+		this.addCommand({
+			id: "delete-all-transcripts",
+			name: "Delete all AssemblyAI transcripts",
+			callback: async () => {
+				if (this.settings.transcriptionService !== "assemblyai") {
+					new Notice("This command is only available when using AssemblyAI as the transcription service");
+					return;
+				}
+				await this.audioHandler.deleteAllTranscripts();
 			},
 		});
 	}

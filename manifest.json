@@ -1,11 +1,11 @@
 {
-  "id": "whisper-reworked",
+  "id": "whisper-reworked-ac",
   "name": "whisper-obsidian-plugin",
-  "version": "0.0.1.1",
-  "minAppVersion": "0.0.1.1",
-  "description": "Speech-to-text in Obsidian using OpenAI Whisper",
-  "author": "Nik Danilov",
-  "authorUrl": "https://nikdanilov.com",
-  "fundingUrl": "patreon.com/nikdanilov",
+  "version": "0.0.1.2",
+  "minAppVersion": "0.0.1.2",
+  "description": "Speech-to-text in Obsidian using OpenAI Whisper. Built on top of the Whisper plugin by @nikdanilov and fork by @MNoichl",
+  "author": "Alex Coote",
+  "authorUrl": "n.a.",
+  "fundingUrl": "n.a.",
   "isDesktopOnly": false
 }

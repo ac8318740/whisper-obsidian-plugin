@@ -31,9 +31,19 @@ export class Controls extends Modal {
 
 	async pauseRecording() {
 		console.log("pausing recording...");
-		await this.plugin.recorder.pauseRecording();
-		this.plugin.timer.pause();
-		this.resetGUI();
+		const currentState = this.plugin.recorder.getRecordingState();
+		
+		if (currentState === "recording") {
+			await this.plugin.recorder.pauseRecording();
+			this.plugin.statusBar.updateStatus(RecordingStatus.Paused);
+			this.plugin.timer.pause();
+			this.pauseButton.setIcon("play").setTooltip("Resume recording");
+		} else if (currentState === "paused") {
+			await this.plugin.recorder.pauseRecording();
+			this.plugin.statusBar.updateStatus(RecordingStatus.Recording);
+			this.plugin.timer.resume();
+			this.pauseButton.setIcon("pause").setTooltip("Pause recording");
+		}
 	}
 
 	async stopRecording() {
@@ -46,71 +56,72 @@ export class Controls extends Modal {
 		const extension = this.plugin.recorder.getMimeType()?.split("/")[1];
 		const fileName = generateTimestampedFileName(extension);
 		
-		await this.plugin.audioHandler.sendAudioData(blob, fileName);
+		await this.plugin.audioHandler.processAudioChunks(blob, fileName);
 		this.plugin.statusBar.updateStatus(RecordingStatus.Idle);
 		this.updateTimerDisplay();
 	}
 
 	updateTimerDisplay() {
-		this.timerDisplay.textContent = this.plugin.timer.getFormattedTime();
+		if (this.timerDisplay) {
+			this.timerDisplay.textContent = this.plugin.timer.getDisplay();
+		}
 	}
 
 	resetGUI() {
-		const recorderState = this.plugin.recorder.getRecordingState();
-
-		this.startButton.setDisabled(
-			recorderState === "recording" || recorderState === "paused"
-		);
-		this.pauseButton.setDisabled(
-			recorderState === "inactive"
-		);
-		this.stopButton.setDisabled(
-			recorderState === "inactive"
-		);
-
-		this.pauseButton.setButtonText(
-			recorderState === "paused" ? " Resume" : " Pause"
-		);
+		const status = this.plugin.statusBar.status;
+		
+		// Update button states based on recording status
+		this.startButton.setDisabled(status === RecordingStatus.Recording || status === RecordingStatus.Paused);
+		this.pauseButton.setDisabled(status !== RecordingStatus.Recording && status !== RecordingStatus.Paused);
+		this.stopButton.setDisabled(status !== RecordingStatus.Recording && status !== RecordingStatus.Paused);
+		
+		// Reset pause button icon if needed
+		if (status === RecordingStatus.Recording) {
+			this.pauseButton.setIcon("pause").setTooltip("Pause recording");
+		} else if (status === RecordingStatus.Paused) {
+			this.pauseButton.setIcon("play").setTooltip("Resume recording");
+		}
 	}
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.empty();
 
-		// Add elapsed time display
-		this.timerDisplay = contentEl.createEl("div", { cls: "timer" });
-		this.updateTimerDisplay();
-
-		// Add button group
-		const buttonGroupEl = contentEl.createEl("div", {
-			cls: "button-group",
+		// Timer display
+		this.timerDisplay = contentEl.createEl("div", {
+			cls: "recording-timer",
+			text: "00:00",
 		});
 
-		// Add record button
-		this.startButton = new ButtonComponent(buttonGroupEl);
-		this.startButton
-			.setIcon("microphone")
-			.setButtonText(" Record")
-			.onClick(this.startRecording.bind(this))
-			.buttonEl.addClass("button-component");
+		// Create button container
+		const buttonContainer = contentEl.createEl("div", {
+			cls: "recording-controls-buttons",
+		});
 
-		// Add pause button
-		this.pauseButton = new ButtonComponent(buttonGroupEl);
-		this.pauseButton
+		// Start button
+		this.startButton = new ButtonComponent(buttonContainer)
+			.setIcon("play")
+			.setTooltip("Start recording")
+			.onClick(async () => {
+				await this.startRecording();
+			});
+
+		// Pause button
+		this.pauseButton = new ButtonComponent(buttonContainer)
 			.setIcon("pause")
-			.setButtonText(" Pause")
-			.onClick(this.pauseRecording.bind(this))
+			.setTooltip("Pause recording")
 			.setDisabled(true)
-			.buttonEl.addClass("button-component");
+			.onClick(async () => {
+				await this.pauseRecording();
+			});
 
-		// Add stop button
-		this.stopButton = new ButtonComponent(buttonGroupEl);
-		this.stopButton
-			.setIcon("square")
-			.setButtonText(" Stop")
-			.onClick(this.stopRecording.bind(this))
+		// Stop button
+		this.stopButton = new ButtonComponent(buttonContainer)
+			.setIcon("stop")
+			.setTooltip("Stop recording")
 			.setDisabled(true)
-			.buttonEl.addClass("button-component");
+			.onClick(async () => {
+				await this.stopRecording();
+			});
 
 		// Add language selector below the controls
 		const languageSetting = new Setting(contentEl)

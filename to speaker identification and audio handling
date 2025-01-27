@@ -1,0 +1,15 @@
+warning: in the working copy of 'main.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'yarn.lock', LF will be replaced by CRLF the next time Git touches it
+main.js
+main.ts
+manifest.json
+package-lock.json
+package.json
+src/AudioHandler.ts
+src/AudioRecorder.ts
+src/Controls.ts
+src/SettingsManager.ts
+src/StatusBar.ts
+src/Timer.ts
+src/WhisperSettingsTab.ts
+yarn.lock
