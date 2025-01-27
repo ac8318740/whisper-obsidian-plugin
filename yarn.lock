@@ -205,10 +205,10 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@esbuild/darwin-arm64@0.18.0":
+"@esbuild/win32-x64@0.18.0":
   version "0.18.0"
-  resolved "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.18.0.tgz"
-  integrity sha512-5GsFovtGyjMIXJrcCzmI1hX3TneCrmFncFIlo0WrRvWcVU6H094P854ZaP8qoLgevXhggO2dhlEGYY0Zv6/S9Q==
+  resolved "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.18.0.tgz"
+  integrity sha512-WJxImv0Pehpbo+pgg7Xrn88/b6ZzSweNHTw/2LW95JjeQUIS6ToJeQmjAdud9H3yiHJmhLOmEAOvUdNLhptD0w==
 
 "@eslint-community/eslint-utils@^4.2.0":
   version "4.4.1"
@@ -241,28 +241,6 @@
   version "8.57.1"
   resolved "https://registry.npmjs.org/@eslint/js/-/js-8.57.1.tgz"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
-
-"@ffmpeg/core@^0.12.6":
-  version "0.12.8"
-  resolved "https://registry.npmjs.org/@ffmpeg/core/-/core-0.12.8.tgz"
-  integrity sha512-GbEy5PKWPYJDv59vm9ehW0Pxf3IoX/a1Ja8+16/wIHt3dj5I6lgYqQNJAnMB/4FeAiIC121jTGegwYDBTLpe0g==
-
-"@ffmpeg/ffmpeg@^0.12.13":
-  version "0.12.13"
-  resolved "https://registry.npmjs.org/@ffmpeg/ffmpeg/-/ffmpeg-0.12.13.tgz"
-  integrity sha512-DX5xvpxkV0QaHIJRMRiz8zfh4mJO01rPKrpXgIzHWSB0A58YMUvbBJxHs4cSJPcX1Lar7HK6RAi28ObsUe7V8A==
-  dependencies:
-    "@ffmpeg/types" "^0.12.3"
-
-"@ffmpeg/types@^0.12.3":
-  version "0.12.3"
-  resolved "https://registry.npmjs.org/@ffmpeg/types/-/types-0.12.3.tgz"
-  integrity sha512-WK01NqTfFfdXxxVD2+OQnd6LQp4ahWq2kjIh/eVoTo43Lo9ICI5nLOItg/1rcIvOuM7J1ANWTBazWGBKk1kACA==
-
-"@ffmpeg/util@^0.12.1":
-  version "0.12.1"
-  resolved "https://registry.npmjs.org/@ffmpeg/util/-/util-0.12.1.tgz"
-  integrity sha512-10jjfAKWaDyb8+nAkijcsi9wgz/y26LOc1NKJradNMyCIl6usQcBbhkjX5qhALrSBcOy6TOeksunTYa+a03qNQ==
 
 "@humanwhocodes/config-array@^0.13.0":
   version "0.13.0"
@@ -774,6 +752,13 @@ arrify@^1.0.1:
   version "1.0.1"
   resolved "https://registry.npmjs.org/arrify/-/arrify-1.0.1.tgz"
   integrity sha512-3CYzex9M9FGQjCGMGyi6/31c8GJbgb0qGyrx5HWxPd0aCwh4cB2YjMb2Xf9UuoogrMrlO9cTqnB5rI5GHZTcUA==
+
+assemblyai@^4.8.0:
+  version "4.8.0"
+  resolved "https://registry.npmjs.org/assemblyai/-/assemblyai-4.8.0.tgz"
+  integrity sha512-TRIcthDBdJ+lj1ohLa516Kr/BO2AQn+IhBBl/eeomZGZym90aEC6qirc337hEPUxmmINSJ8XTSY4xwy51HmDGA==
+  dependencies:
+    ws "^8.18.0"
 
 ast-types@^0.13.4:
   version "0.13.4"
@@ -4857,6 +4842,11 @@ write-file-atomic@^3.0.3:
     is-typedarray "^1.0.0"
     signal-exit "^3.0.2"
     typedarray-to-buffer "^3.1.5"
+
+ws@^8.18.0:
+  version "8.18.0"
+  resolved "https://registry.npmjs.org/ws/-/ws-8.18.0.tgz"
+  integrity sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==
 
 xdg-basedir@^5.0.1, xdg-basedir@^5.1.0:
   version "5.1.0"

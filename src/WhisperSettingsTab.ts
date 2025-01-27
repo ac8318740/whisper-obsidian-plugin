@@ -23,21 +23,227 @@ export class WhisperSettingsTab extends PluginSettingTab {
 		this.containerEl.createEl("h2", { text: "API Keys" });
 		this.createApiKeySettings();
 		
-		// Add new Whisper Settings header
-		this.containerEl.createEl("h2", { text: "Whisper Settings" });
-		this.createApiUrlSetting();
-		this.createModelSetting();
-		this.createPromptSetting();
-		this.createLanguageSetting();
+		// Add transcription service settings
+		containerEl.createEl('h3', { text: 'Transcription Service Settings' });
+
+		new Setting(containerEl)
+			.setName('Transcription Service')
+			.setDesc('Choose which service to use for transcription')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption('whisper', 'Whisper')
+					.addOption('assemblyai', 'AssemblyAI')
+					.setValue(this.plugin.settings.transcriptionService)
+					.onChange(async (value: "whisper" | "assemblyai") => {
+						this.plugin.settings.transcriptionService = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+						this.display();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName('Prompt')
+			.setDesc('Words or phrases to help with transcription accuracy (comma-separated). For Whisper, this helps with correct spellings. For AssemblyAI, this boosts recognition of these terms.')
+			.addTextArea(text => text
+				.setPlaceholder('Enter words or phrases separated by commas')
+				.setValue(this.plugin.settings.prompt)
+				.onChange(async (value) => {
+					this.plugin.settings.prompt = value;
+					await this.settingsManager.saveSettings(this.plugin.settings);
+				}));
+
+		// Create containers for each service's settings
+		const whisperContainer = containerEl.createDiv();
+		const assemblyAIContainer = containerEl.createDiv();
+
+		// Show/hide based on selected service
+		whisperContainer.style.display = this.plugin.settings.transcriptionService === "whisper" ? "block" : "none";
+		assemblyAIContainer.style.display = this.plugin.settings.transcriptionService === "assemblyai" ? "block" : "none";
+
+		// Whisper Settings
+		if (this.plugin.settings.transcriptionService === "whisper") {
+			whisperContainer.createEl("h2", { text: "Whisper Settings" });
+			this.createApiUrlSetting(whisperContainer);
+			this.createModelSetting(whisperContainer);
+			this.createLanguageSetting(whisperContainer);
+		}
+
+		// AssemblyAI Settings
+		if (this.plugin.settings.transcriptionService === "assemblyai") {
+			assemblyAIContainer.createEl("h2", { text: "AssemblyAI Settings" });
+			
+			new Setting(assemblyAIContainer)
+				.setName("Model")
+				.setDesc("Choose which model to use for transcription")
+				.addDropdown(dropdown => {
+					dropdown
+						.addOption("best", "Best Tier")
+						.addOption("nano", "Nano")
+						.setValue(this.plugin.settings.assemblyAiModel || "best")
+						.onChange(async (value: "best" | "nano") => {
+							this.plugin.settings.assemblyAiModel = value;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+						});
+				});
+
+			new Setting(assemblyAIContainer)
+				.setName("Word Boost Weight")
+				.setDesc("Control how much weight to apply to the boosted words/phrases")
+				.addDropdown(dropdown => {
+					dropdown
+						.addOption("low", "Low")
+						.addOption("default", "Default")
+						.addOption("high", "High")
+						.setValue(this.plugin.settings.boostParam)
+						.onChange(async (value: "low" | "default" | "high") => {
+							this.plugin.settings.boostParam = value;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+						});
+				});
+
+			// AssemblyAI API Key
+			new Setting(assemblyAIContainer)
+				.setName("AssemblyAI API Key")
+				.setDesc("Enter your AssemblyAI API key")
+				.addText(text => text
+					.setPlaceholder("Enter your AssemblyAI API key")
+					.setValue(this.plugin.settings.assemblyAiApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.assemblyAiApiKey = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+					}));
+
+			// Speaker Diarization Toggle
+			new Setting(assemblyAIContainer)
+				.setName("Enable Speaker Diarization")
+				.setDesc("Identify and label different speakers in the transcription")
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.useSpeakerDiarization)
+					.onChange(async (value) => {
+						this.plugin.settings.useSpeakerDiarization = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+						// Force refresh to update speaker count visibility
+						this.display();
+					}));
+
+			// Speaker Count (only shown if diarization is enabled)
+			if (this.plugin.settings.useSpeakerDiarization) {
+				new Setting(assemblyAIContainer)
+					.setName("Expected Speaker Count")
+					.setDesc("Optional: Specify the expected number of speakers (leave empty for automatic detection)")
+					.addText(text => text
+						.setPlaceholder("e.g., 2")
+						.setValue(this.plugin.settings.speakerCount?.toString() ?? "")
+						.onChange(async (value) => {
+							const numValue = value ? parseInt(value) : undefined;
+							this.plugin.settings.speakerCount = numValue;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+						}));
+			}
+		}
+
+		// Common Settings (always visible)
+		this.containerEl.createEl("h2", { text: "File Settings" });
 		this.createSaveAudioFileToggleSetting();
 		this.createSaveAudioFilePathSetting();
 		this.createNewFileToggleSetting();
 		this.createNewFilePathSetting();
 		this.createDebugModeToggleSetting();
 
-		this.containerEl.createEl("h2", { text: "Post-processing Settings" });
-		this.createPostProcessingSettings();
+		// Post-processing settings
+		containerEl.createEl("h3", { text: "Post-processing Settings with OpenAI/Claude" });
 
+		new Setting(containerEl)
+			.setName("Use Post-Processing")
+			.setDesc("Use AI to clean up and format the transcription, including speaker name mapping for AssemblyAI")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.usePostProcessing)
+					.onChange(async (value) => {
+						this.plugin.settings.usePostProcessing = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+						// Trigger refresh to show/hide dependent settings
+						this.display();
+					})
+			);
+
+		if (this.plugin.settings.usePostProcessing) {
+			new Setting(containerEl)
+				.setName("Post-Processing Model")
+				.setDesc("Select the model to use for post-processing")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("gpt-4o", "GPT-4o")
+						.addOption("gpt-4o-mini", "GPT-4o-mini")
+						.addOption("claude-3-5-sonnet-latest", "Claude 3.5 Sonnet")
+						.addOption("claude-3-5-haiku-latest", "Claude 3.5 Haiku")
+						.setValue(this.plugin.settings.postProcessingModel)
+						.onChange(async (value) => {
+							this.plugin.settings.postProcessingModel = value;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+							// Trigger refresh to show/hide API key settings
+							this.display();
+						})
+				);
+
+			const isAnthropicModel = this.plugin.settings.postProcessingModel.startsWith('claude');
+			
+			if (isAnthropicModel) {
+				new Setting(containerEl)
+					.setName("Anthropic API Key")
+					.setDesc("Your Anthropic API key for Claude models")
+					.addText((text) =>
+						text
+							.setPlaceholder("Enter your Anthropic API key")
+							.setValue(this.plugin.settings.anthropicApiKey)
+							.onChange(async (value) => {
+								this.plugin.settings.anthropicApiKey = value;
+								await this.settingsManager.saveSettings(this.plugin.settings);
+							})
+					);
+			} else {
+				new Setting(containerEl)
+					.setName("OpenAI API Key")
+					.setDesc("Your OpenAI API key for GPT models")
+					.addText((text) =>
+						text
+							.setPlaceholder("Enter your OpenAI API key")
+							.setValue(this.plugin.settings.openAiApiKey)
+							.onChange(async (value) => {
+								this.plugin.settings.openAiApiKey = value;
+								await this.settingsManager.saveSettings(this.plugin.settings);
+							})
+					);
+			}
+
+			new Setting(containerEl)
+				.setName("Post-Processing Prompt")
+				.setDesc("The prompt to use for post-processing. For AssemblyAI transcripts, include instructions for mapping speaker labels to names.")
+				.addTextArea((text) =>
+					text
+						.setPlaceholder("Enter your post-processing prompt")
+						.setValue(this.plugin.settings.postProcessingPrompt)
+						.onChange(async (value) => {
+							this.plugin.settings.postProcessingPrompt = value;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+						})
+				);
+
+			// Add setting for keeping original transcription
+			new Setting(containerEl)
+				.setName("Keep Original Transcription")
+				.setDesc("Include the original transcription (before post-processing) in the output file")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.keepOriginalTranscription)
+						.onChange(async (value) => {
+							this.plugin.settings.keepOriginalTranscription = value;
+							await this.settingsManager.saveSettings(this.plugin.settings);
+						})
+				);
+		}
+
+		// Silence removal settings (common for both)
 		this.createSilenceRemovalSettings();
 	}
 
@@ -111,56 +317,49 @@ export class WhisperSettingsTab extends PluginSettingTab {
 		);
 	}
 
-	private createApiUrlSetting(): void {
-		this.createTextSetting(
-			"API URL",
-			"Specify the endpoint that will be used to make requests to",
-			"https://api.your-custom-url.com",
-			this.plugin.settings.apiUrl,
-			async (value) => {
-				this.plugin.settings.apiUrl = value;
-				await this.settingsManager.saveSettings(this.plugin.settings);
-			}
-		);
+	private createApiUrlSetting(container = this.containerEl) {
+		new Setting(container)
+			.setName("API URL")
+			.setDesc("Specify the endpoint that will be used to make requests to")
+			.addText((text) =>
+				text
+					.setPlaceholder("https://api.your-custom-url.com")
+					.setValue(this.plugin.settings.apiUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.apiUrl = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+					})
+			);
 	}
 
-	private createModelSetting(): void {
-		this.createTextSetting(
-			"Model",
-			"Specify the machine learning model to use for transcribing audio to text (whisper-1 for OpenAI, whisper-large-v3 for Groq)",
-			"whisper-1",
-			this.plugin.settings.model,
-			async (value) => {
-				this.plugin.settings.model = value;
-				await this.settingsManager.saveSettings(this.plugin.settings);
-			}
-		);
+	private createModelSetting(container = this.containerEl) {
+		new Setting(container)
+			.setName("Model")
+			.setDesc("Specify the machine learning model to use for transcribing audio to text")
+			.addText((text) =>
+				text
+					.setPlaceholder("whisper-1")
+					.setValue(this.plugin.settings.model)
+					.onChange(async (value) => {
+						this.plugin.settings.model = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+					})
+			);
 	}
 
-	private createPromptSetting(): void {
-		this.createTextSetting(
-			"Prompt",
-			"Optional: Add words with their correct spellings to help with transcription. Make sure it matches the chosen language.",
-			"Example: ZyntriQix, Digique Plus, CynapseFive",
-			this.plugin.settings.prompt,
-			async (value) => {
-				this.plugin.settings.prompt = value;
-				await this.settingsManager.saveSettings(this.plugin.settings);
-			}
-		);
-	}
-
-	private createLanguageSetting(): void {
-		this.createTextSetting(
-			"Language",
-			"Specify the language of the message being whispered (e.g. en for English). This can be left blank for auto-detection with OpenAI, but has to be set when using Groq.",
-			"en",
-			this.plugin.settings.language,
-			async (value) => {
-				this.plugin.settings.language = value;
-				await this.settingsManager.saveSettings(this.plugin.settings);
-			}
-		);
+	private createLanguageSetting(container = this.containerEl) {
+		new Setting(container)
+			.setName("Language")
+			.setDesc("Specify the language of the message being whispered")
+			.addText((text) =>
+				text
+					.setPlaceholder("en")
+					.setValue(this.plugin.settings.language)
+					.onChange(async (value) => {
+						this.plugin.settings.language = value;
+						await this.settingsManager.saveSettings(this.plugin.settings);
+					})
+			);
 	}
 
 	private createSaveAudioFileToggleSetting(): void {
@@ -266,89 +465,6 @@ export class WhisperSettingsTab extends PluginSettingTab {
 						);
 					});
 			});
-	}
-	
-
-
-	private createPostProcessingSettings(): void {
-		// Toggle to enable/disable post-processing
-		new Setting(this.containerEl)
-			.setName("Use Post-processing")
-			.setDesc("Turn on to post-process the transcribed text using GPT.")
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.usePostProcessing)
-				.onChange(async (value) => {
-					this.plugin.settings.usePostProcessing = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-					// You may want to enable/disable other controls based on this value
-				}));
-
-		// Post-processing prompt
-		new Setting(this.containerEl)
-			.setName("Post-processing Prompt")
-			.setDesc("Enter the prompt that will be sent to the GPT model to polish the transcription.")
-			.addTextArea(textArea => textArea
-				.setPlaceholder("Enter your prompt here...")
-				.setValue(this.plugin.settings.postProcessingPrompt)
-				.onChange(async (value) => {
-					this.plugin.settings.postProcessingPrompt = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-				}));
-
-
-		// Update model dropdown
-		const models = [
-			"gpt-4o",
-			"gpt-4o-mini",
-			"claude-3-5-sonnet-latest",
-			"claude-3-5-haiku-latest",
-			"claude-3-opus-latest"
-		];
-		new Setting(this.containerEl)
-			.setName("Post-processing Model")
-			.setDesc("Select which AI model to use for post-processing.")
-			.addDropdown(dropdown => {
-				models.forEach(model => dropdown.addOption(model, model));
-				dropdown.setValue(this.plugin.settings.postProcessingModel);
-				dropdown.onChange(async (value) => {
-					this.plugin.settings.postProcessingModel = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-				});
-			});
-
-		// Auto generate title
-		new Setting(this.containerEl)
-			.setName("Auto-generate Title")
-			.setDesc("Turn on to automatically generate a title for the transcribed text.")
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoGenerateTitle)
-				.onChange(async (value) => {
-					this.plugin.settings.autoGenerateTitle = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-				}));
-
-		// Title-generation prompt
-		new Setting(this.containerEl)
-			.setName("Title-generation Prompt")
-			.setDesc("The prompt used to generate a title from the transcribed text.")
-			.addTextArea(textArea => textArea
-				.setPlaceholder("Enter your title-generation prompt...")
-				.setValue(this.plugin.settings.titleGenerationPrompt)
-				.onChange(async (value) => {
-					this.plugin.settings.titleGenerationPrompt = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-				}));
-
-		// Add new setting for keeping original transcription
-		new Setting(this.containerEl)
-			.setName("Keep Original Transcription")
-			.setDesc("If enabled, adds the original Whisper transcription below the post-processed text.")
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.keepOriginalTranscription)
-				.onChange(async (value) => {
-					this.plugin.settings.keepOriginalTranscription = value;
-					await this.settingsManager.saveSettings(this.plugin.settings);
-				}));
 	}
 
 	private createSilenceRemovalSettings(): void {

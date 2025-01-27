@@ -16,7 +16,7 @@ export interface WhisperSettings {
 	createNewFileAfterRecordingPath: string;
 
 	// New fields:
-	usePostProcessing: boolean;              // (1) Use postprocessing
+	usePostProcessing: boolean;             // (1) Use postprocessing
 	postProcessingPrompt: string;           // (2) Post-processing prompt
 	postProcessingModel: string;            // (3) Model dropdown
 	autoGenerateTitle: boolean;             // (4) Auto generate title
@@ -28,6 +28,14 @@ export interface WhisperSettings {
 	silenceThreshold: number;  // in dB
 	silenceDuration: number;   // in seconds
 	silenceRemoveAll: boolean; // whether to remove all silence periods
+
+	transcriptionService: "whisper" | "assemblyai";
+	assemblyAiApiKey: string;
+	useSpeakerDiarization: boolean;
+	speakerCount?: number;
+	wordBoost: string[]; // Array of words to boost during transcription
+	assemblyAiModel: "best" | "nano";
+	boostParam: "low" | "default" | "high"; // Parameter to control word boost weight
 }
 
 export const DEFAULT_SETTINGS: WhisperSettings = {
@@ -45,8 +53,8 @@ export const DEFAULT_SETTINGS: WhisperSettings = {
 	createNewFileAfterRecordingPath: "",
 
 	// Set defaults for new settings
-	usePostProcessing: true,
-	postProcessingPrompt: "You are a perfect transcription program that is able to take faulty dictations and put them into a readable, grammatically correct form without changing their content or changing their specific formulations. It is important that you leave formulations as they are, and make no attempts to formalize or professionalize them. Always return as much of the content as possible. If there are repetions of content, choose the best (often last) one and make the sentence work with that. Just return the dictation, do not comment on it, or introduce it. Always transcribe in the language of the dictation. Here comes the dictation: \n\n",
+	usePostProcessing: false,
+	postProcessingPrompt: "",
 	postProcessingModel: "gpt-4o",
 	autoGenerateTitle: true,
 	titleGenerationPrompt: "You are an intelligent bureaucratic assistant. You are tasked with generating a short (1-5 words), precise title for the TEXT below. Reply only with the title, nothing else. Generate the title in the main language of the TEXT. TEXT:",
@@ -57,6 +65,14 @@ export const DEFAULT_SETTINGS: WhisperSettings = {
 	silenceThreshold: -30,
 	silenceDuration: 2,
 	silenceRemoveAll: true,
+
+	transcriptionService: "whisper",
+	assemblyAiApiKey: "",
+	useSpeakerDiarization: false,
+	speakerCount: undefined,
+	wordBoost: [], // Default to empty array
+	assemblyAiModel: "best",
+	boostParam: "default" // Default boost parameter
 };
 
 export class SettingsManager {

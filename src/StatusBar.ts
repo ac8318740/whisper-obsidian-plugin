@@ -3,6 +3,7 @@ import { Plugin } from "obsidian";
 export enum RecordingStatus {
 	Idle = "idle",
 	Recording = "recording",
+	Paused = "paused",
 	Processing = "processing",
 }
 
@@ -28,6 +29,10 @@ export class StatusBar {
 				case RecordingStatus.Recording:
 					this.statusBarItem.textContent = "Recording...";
 					this.statusBarItem.style.color = "red";
+					break;
+				case RecordingStatus.Paused:
+					this.statusBarItem.textContent = "Recording Paused";
+					this.statusBarItem.style.color = "orange";
 					break;
 				case RecordingStatus.Processing:
 					this.statusBarItem.textContent = "Processing audio...";
