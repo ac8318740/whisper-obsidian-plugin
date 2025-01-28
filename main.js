@@ -294,14 +294,14 @@ var Controls = class extends import_obsidian.Modal {
   }
 };
 
-// node_modules/axios/lib/helpers/bind.js
+// ../node_modules/axios/lib/helpers/bind.js
 function bind(fn, thisArg) {
   return function wrap() {
     return fn.apply(thisArg, arguments);
   };
 }
 
-// node_modules/axios/lib/utils.js
+// ../node_modules/axios/lib/utils.js
 var { toString } = Object.prototype;
 var { getPrototypeOf } = Object;
 var kindOf = ((cache) => (thing) => {
@@ -686,7 +686,7 @@ var utils_default = {
   asap
 };
 
-// node_modules/axios/lib/core/AxiosError.js
+// ../node_modules/axios/lib/core/AxiosError.js
 function AxiosError(message, code, config, request2, response) {
   Error.call(this);
   if (Error.captureStackTrace) {
@@ -761,10 +761,10 @@ AxiosError.from = (error, code, config, request2, response, customProps) => {
 };
 var AxiosError_default = AxiosError;
 
-// node_modules/axios/lib/helpers/null.js
+// ../node_modules/axios/lib/helpers/null.js
 var null_default = null;
 
-// node_modules/axios/lib/helpers/toFormData.js
+// ../node_modules/axios/lib/helpers/toFormData.js
 function isVisitable(thing) {
   return utils_default.isPlainObject(thing) || utils_default.isArray(thing);
 }
@@ -879,7 +879,7 @@ function toFormData(obj, formData, options) {
 }
 var toFormData_default = toFormData;
 
-// node_modules/axios/lib/helpers/AxiosURLSearchParams.js
+// ../node_modules/axios/lib/helpers/AxiosURLSearchParams.js
 function encode(str) {
   const charMap = {
     "!": "%21",
@@ -912,7 +912,7 @@ prototype2.toString = function toString2(encoder) {
 };
 var AxiosURLSearchParams_default = AxiosURLSearchParams;
 
-// node_modules/axios/lib/helpers/buildURL.js
+// ../node_modules/axios/lib/helpers/buildURL.js
 function encode2(val) {
   return encodeURIComponent(val).replace(/%3A/gi, ":").replace(/%24/g, "$").replace(/%2C/gi, ",").replace(/%20/g, "+").replace(/%5B/gi, "[").replace(/%5D/gi, "]");
 }
@@ -943,7 +943,7 @@ function buildURL(url, params, options) {
   return url;
 }
 
-// node_modules/axios/lib/core/InterceptorManager.js
+// ../node_modules/axios/lib/core/InterceptorManager.js
 var InterceptorManager = class {
   constructor() {
     this.handlers = [];
@@ -1007,23 +1007,23 @@ var InterceptorManager = class {
 };
 var InterceptorManager_default = InterceptorManager;
 
-// node_modules/axios/lib/defaults/transitional.js
+// ../node_modules/axios/lib/defaults/transitional.js
 var transitional_default = {
   silentJSONParsing: true,
   forcedJSONParsing: true,
   clarifyTimeoutError: false
 };
 
-// node_modules/axios/lib/platform/browser/classes/URLSearchParams.js
+// ../node_modules/axios/lib/platform/browser/classes/URLSearchParams.js
 var URLSearchParams_default = typeof URLSearchParams !== "undefined" ? URLSearchParams : AxiosURLSearchParams_default;
 
-// node_modules/axios/lib/platform/browser/classes/FormData.js
+// ../node_modules/axios/lib/platform/browser/classes/FormData.js
 var FormData_default = typeof FormData !== "undefined" ? FormData : null;
 
-// node_modules/axios/lib/platform/browser/classes/Blob.js
+// ../node_modules/axios/lib/platform/browser/classes/Blob.js
 var Blob_default = typeof Blob !== "undefined" ? Blob : null;
 
-// node_modules/axios/lib/platform/browser/index.js
+// ../node_modules/axios/lib/platform/browser/index.js
 var browser_default = {
   isBrowser: true,
   classes: {
@@ -1034,7 +1034,7 @@ var browser_default = {
   protocols: ["http", "https", "file", "blob", "url", "data"]
 };
 
-// node_modules/axios/lib/platform/common/utils.js
+// ../node_modules/axios/lib/platform/common/utils.js
 var utils_exports = {};
 __export(utils_exports, {
   hasBrowserEnv: () => hasBrowserEnv,
@@ -1052,13 +1052,13 @@ var hasStandardBrowserWebWorkerEnv = (() => {
 })();
 var origin = hasBrowserEnv && window.location.href || "http://localhost";
 
-// node_modules/axios/lib/platform/index.js
+// ../node_modules/axios/lib/platform/index.js
 var platform_default = {
   ...utils_exports,
   ...browser_default
 };
 
-// node_modules/axios/lib/helpers/toURLEncodedForm.js
+// ../node_modules/axios/lib/helpers/toURLEncodedForm.js
 function toURLEncodedForm(data, options) {
   return toFormData_default(data, new platform_default.classes.URLSearchParams(), Object.assign({
     visitor: function(value, key, path, helpers) {
@@ -1071,7 +1071,7 @@ function toURLEncodedForm(data, options) {
   }, options));
 }
 
-// node_modules/axios/lib/helpers/formDataToJSON.js
+// ../node_modules/axios/lib/helpers/formDataToJSON.js
 function parsePropPath(name) {
   return utils_default.matchAll(/\w+|\[(\w*)]/g, name).map((match) => {
     return match[0] === "[]" ? "" : match[1] || match[0];
@@ -1125,7 +1125,7 @@ function formDataToJSON(formData) {
 }
 var formDataToJSON_default = formDataToJSON;
 
-// node_modules/axios/lib/defaults/index.js
+// ../node_modules/axios/lib/defaults/index.js
 function stringifySafely(rawValue, parser, encoder) {
   if (utils_default.isString(rawValue)) {
     try {
@@ -1234,7 +1234,7 @@ utils_default.forEach(["delete", "get", "head", "post", "put", "patch"], (method
 });
 var defaults_default = defaults;
 
-// node_modules/axios/lib/helpers/parseHeaders.js
+// ../node_modules/axios/lib/helpers/parseHeaders.js
 var ignoreDuplicateOf = utils_default.toObjectSet([
   "age",
   "authorization",
@@ -1279,7 +1279,7 @@ var parseHeaders_default = (rawHeaders) => {
   return parsed;
 };
 
-// node_modules/axios/lib/core/AxiosHeaders.js
+// ../node_modules/axios/lib/core/AxiosHeaders.js
 var $internals = Symbol("internals");
 function normalizeHeader(header) {
   return header && String(header).trim().toLowerCase();
@@ -1501,7 +1501,7 @@ utils_default.reduceDescriptors(AxiosHeaders.prototype, ({ value }, key) => {
 utils_default.freezeMethods(AxiosHeaders);
 var AxiosHeaders_default = AxiosHeaders;
 
-// node_modules/axios/lib/core/transformData.js
+// ../node_modules/axios/lib/core/transformData.js
 function transformData(fns, response) {
   const config = this || defaults_default;
   const context = response || config;
@@ -1514,12 +1514,12 @@ function transformData(fns, response) {
   return data;
 }
 
-// node_modules/axios/lib/cancel/isCancel.js
+// ../node_modules/axios/lib/cancel/isCancel.js
 function isCancel(value) {
   return !!(value && value.__CANCEL__);
 }
 
-// node_modules/axios/lib/cancel/CanceledError.js
+// ../node_modules/axios/lib/cancel/CanceledError.js
 function CanceledError(message, config, request2) {
   AxiosError_default.call(this, message == null ? "canceled" : message, AxiosError_default.ERR_CANCELED, config, request2);
   this.name = "CanceledError";
@@ -1529,7 +1529,7 @@ utils_default.inherits(CanceledError, AxiosError_default, {
 });
 var CanceledError_default = CanceledError;
 
-// node_modules/axios/lib/core/settle.js
+// ../node_modules/axios/lib/core/settle.js
 function settle(resolve, reject, response) {
   const validateStatus2 = response.config.validateStatus;
   if (!response.status || !validateStatus2 || validateStatus2(response.status)) {
@@ -1545,13 +1545,13 @@ function settle(resolve, reject, response) {
   }
 }
 
-// node_modules/axios/lib/helpers/parseProtocol.js
+// ../node_modules/axios/lib/helpers/parseProtocol.js
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
   return match && match[1] || "";
 }
 
-// node_modules/axios/lib/helpers/speedometer.js
+// ../node_modules/axios/lib/helpers/speedometer.js
 function speedometer(samplesCount, min) {
   samplesCount = samplesCount || 10;
   const bytes = new Array(samplesCount);
@@ -1587,7 +1587,7 @@ function speedometer(samplesCount, min) {
 }
 var speedometer_default = speedometer;
 
-// node_modules/axios/lib/helpers/throttle.js
+// ../node_modules/axios/lib/helpers/throttle.js
 function throttle(fn, freq) {
   let timestamp = 0;
   let threshold = 1e3 / freq;
@@ -1622,7 +1622,7 @@ function throttle(fn, freq) {
 }
 var throttle_default = throttle;
 
-// node_modules/axios/lib/helpers/progressEventReducer.js
+// ../node_modules/axios/lib/helpers/progressEventReducer.js
 var progressEventReducer = (listener, isDownloadStream, freq = 3) => {
   let bytesNotified = 0;
   const _speedometer = speedometer_default(50, 250);
@@ -1657,7 +1657,7 @@ var progressEventDecorator = (total, throttled) => {
 };
 var asyncDecorator = (fn) => (...args) => utils_default.asap(() => fn(...args));
 
-// node_modules/axios/lib/helpers/isURLSameOrigin.js
+// ../node_modules/axios/lib/helpers/isURLSameOrigin.js
 var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? ((origin2, isMSIE) => (url) => {
   url = new URL(url, platform_default.origin);
   return origin2.protocol === url.protocol && origin2.host === url.host && (isMSIE || origin2.port === url.port);
@@ -1666,7 +1666,7 @@ var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? ((origin2
   platform_default.navigator && /(msie|trident)/i.test(platform_default.navigator.userAgent)
 ) : () => true;
 
-// node_modules/axios/lib/helpers/cookies.js
+// ../node_modules/axios/lib/helpers/cookies.js
 var cookies_default = platform_default.hasStandardBrowserEnv ? (
   // Standard browser envs support document.cookie
   {
@@ -1699,17 +1699,17 @@ var cookies_default = platform_default.hasStandardBrowserEnv ? (
   }
 );
 
-// node_modules/axios/lib/helpers/isAbsoluteURL.js
+// ../node_modules/axios/lib/helpers/isAbsoluteURL.js
 function isAbsoluteURL(url) {
   return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url);
 }
 
-// node_modules/axios/lib/helpers/combineURLs.js
+// ../node_modules/axios/lib/helpers/combineURLs.js
 function combineURLs(baseURL, relativeURL) {
   return relativeURL ? baseURL.replace(/\/?\/$/, "") + "/" + relativeURL.replace(/^\/+/, "") : baseURL;
 }
 
-// node_modules/axios/lib/core/buildFullPath.js
+// ../node_modules/axios/lib/core/buildFullPath.js
 function buildFullPath(baseURL, requestedURL) {
   if (baseURL && !isAbsoluteURL(requestedURL)) {
     return combineURLs(baseURL, requestedURL);
@@ -1717,7 +1717,7 @@ function buildFullPath(baseURL, requestedURL) {
   return requestedURL;
 }
 
-// node_modules/axios/lib/core/mergeConfig.js
+// ../node_modules/axios/lib/core/mergeConfig.js
 var headersToObject = (thing) => thing instanceof AxiosHeaders_default ? { ...thing } : thing;
 function mergeConfig(config1, config2) {
   config2 = config2 || {};
@@ -1797,7 +1797,7 @@ function mergeConfig(config1, config2) {
   return config;
 }
 
-// node_modules/axios/lib/helpers/resolveConfig.js
+// ../node_modules/axios/lib/helpers/resolveConfig.js
 var resolveConfig_default = (config) => {
   const newConfig = mergeConfig({}, config);
   let { data, withXSRFToken, xsrfHeaderName, xsrfCookieName, headers, auth } = newConfig;
@@ -1830,7 +1830,7 @@ var resolveConfig_default = (config) => {
   return newConfig;
 };
 
-// node_modules/axios/lib/adapters/xhr.js
+// ../node_modules/axios/lib/adapters/xhr.js
 var isXHRAdapterSupported = typeof XMLHttpRequest !== "undefined";
 var xhr_default = isXHRAdapterSupported && function(config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
@@ -1957,7 +1957,7 @@ var xhr_default = isXHRAdapterSupported && function(config) {
   });
 };
 
-// node_modules/axios/lib/helpers/composeSignals.js
+// ../node_modules/axios/lib/helpers/composeSignals.js
 var composeSignals = (signals, timeout) => {
   const { length } = signals = signals ? signals.filter(Boolean) : [];
   if (timeout || length) {
@@ -1993,7 +1993,7 @@ var composeSignals = (signals, timeout) => {
 };
 var composeSignals_default = composeSignals;
 
-// node_modules/axios/lib/helpers/trackStream.js
+// ../node_modules/axios/lib/helpers/trackStream.js
 var streamChunk = function* (chunk, chunkSize) {
   let len = chunk.byteLength;
   if (!chunkSize || len < chunkSize) {
@@ -2070,7 +2070,7 @@ var trackStream = (stream, chunkSize, onProgress, onFinish) => {
   });
 };
 
-// node_modules/axios/lib/adapters/fetch.js
+// ../node_modules/axios/lib/adapters/fetch.js
 var isFetchSupported = typeof fetch === "function" && typeof Request === "function" && typeof Response === "function";
 var isReadableStreamSupported = isFetchSupported && typeof ReadableStream === "function";
 var encodeText = isFetchSupported && (typeof TextEncoder === "function" ? ((encoder) => (str) => encoder.encode(str))(new TextEncoder()) : async (str) => new Uint8Array(await new Response(str).arrayBuffer()));
@@ -2234,7 +2234,7 @@ var fetch_default = isFetchSupported && (async (config) => {
   }
 });
 
-// node_modules/axios/lib/adapters/adapters.js
+// ../node_modules/axios/lib/adapters/adapters.js
 var knownAdapters = {
   http: null_default,
   xhr: xhr_default,
@@ -2288,7 +2288,7 @@ var adapters_default = {
   adapters: knownAdapters
 };
 
-// node_modules/axios/lib/core/dispatchRequest.js
+// ../node_modules/axios/lib/core/dispatchRequest.js
 function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
@@ -2333,10 +2333,10 @@ function dispatchRequest(config) {
   });
 }
 
-// node_modules/axios/lib/env/data.js
+// ../node_modules/axios/lib/env/data.js
 var VERSION = "1.7.9";
 
-// node_modules/axios/lib/helpers/validator.js
+// ../node_modules/axios/lib/helpers/validator.js
 var validators = {};
 ["object", "boolean", "number", "function", "string", "symbol"].forEach((type, i) => {
   validators[type] = function validator(thing) {
@@ -2400,7 +2400,7 @@ var validator_default = {
   validators
 };
 
-// node_modules/axios/lib/core/Axios.js
+// ../node_modules/axios/lib/core/Axios.js
 var validators2 = validator_default.validators;
 var Axios = class {
   constructor(instanceConfig) {
@@ -2567,7 +2567,7 @@ utils_default.forEach(["post", "put", "patch"], function forEachMethodWithData(m
 });
 var Axios_default = Axios;
 
-// node_modules/axios/lib/cancel/CancelToken.js
+// ../node_modules/axios/lib/cancel/CancelToken.js
 var CancelToken = class {
   constructor(executor) {
     if (typeof executor !== "function") {
@@ -2666,19 +2666,19 @@ var CancelToken = class {
 };
 var CancelToken_default = CancelToken;
 
-// node_modules/axios/lib/helpers/spread.js
+// ../node_modules/axios/lib/helpers/spread.js
 function spread(callback) {
   return function wrap(arr) {
     return callback.apply(null, arr);
   };
 }
 
-// node_modules/axios/lib/helpers/isAxiosError.js
+// ../node_modules/axios/lib/helpers/isAxiosError.js
 function isAxiosError(payload) {
   return utils_default.isObject(payload) && payload.isAxiosError === true;
 }
 
-// node_modules/axios/lib/helpers/HttpStatusCode.js
+// ../node_modules/axios/lib/helpers/HttpStatusCode.js
 var HttpStatusCode = {
   Continue: 100,
   SwitchingProtocols: 101,
@@ -2749,7 +2749,7 @@ Object.entries(HttpStatusCode).forEach(([key, value]) => {
 });
 var HttpStatusCode_default = HttpStatusCode;
 
-// node_modules/axios/lib/axios.js
+// ../node_modules/axios/lib/axios.js
 function createInstance(defaultConfig) {
   const context = new Axios_default(defaultConfig);
   const instance = bind(Axios_default.prototype.request, context);
@@ -2782,7 +2782,7 @@ axios.HttpStatusCode = HttpStatusCode_default;
 axios.default = axios;
 var axios_default = axios;
 
-// node_modules/axios/index.js
+// ../node_modules/axios/index.js
 var {
   Axios: Axios2,
   AxiosError: AxiosError2,
@@ -3101,7 +3101,7 @@ var SpeakerReviewModal = class extends import_obsidian2.Modal {
   }
 };
 
-// node_modules/assemblyai/dist/browser.mjs
+// ../node_modules/assemblyai/dist/browser.mjs
 var DEFAULT_FETCH_INIT = {
   cache: "no-store"
 };
@@ -3971,6 +3971,28 @@ var AudioHandler = class {
   async processWithAssemblyAI(audioData, initialSpeakerCount) {
     try {
       this.plugin.statusBar.updateStatus("processing" /* Processing */);
+      const now = /* @__PURE__ */ new Date();
+      const timestampFileName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
+      const audioFileName = `${timestampFileName}.wav`;
+      let savedAudioPath = "";
+      if (this.plugin.settings.saveAudioFile) {
+        try {
+          const arrayBuffer = await audioData.arrayBuffer();
+          const audioFilePath = `${this.plugin.settings.saveAudioFilePath ? `${this.plugin.settings.saveAudioFilePath}/` : ""}${audioFileName}`;
+          await this.plugin.app.vault.adapter.writeBinary(
+            audioFilePath,
+            new Uint8Array(arrayBuffer)
+          );
+          savedAudioPath = audioFilePath;
+          if (this.plugin.settings.debugMode) {
+            console.log("Audio file saved:", audioFilePath);
+          }
+          new import_obsidian3.Notice("Audio file saved successfully");
+        } catch (err) {
+          console.error("Error saving audio file:", err);
+          new import_obsidian3.Notice("Error saving audio file: " + err.message);
+        }
+      }
       if (!this.assemblyClient) {
         this.initializeAssemblyAI();
       }
@@ -4052,7 +4074,11 @@ var AudioHandler = class {
         transcriptResult.speakerIdentifications = speakerIdentifications;
       }
       if (transcriptResult) {
-        await this.processTranscriptionResult(transcriptResult);
+        await this.processTranscriptionResult(
+          transcriptResult,
+          savedAudioPath,
+          timestampFileName
+        );
       }
     } catch (error) {
       console.error("Error in processWithAssemblyAI:", error);
@@ -4087,7 +4113,7 @@ var AudioHandler = class {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
     return sentences.slice(0, 2).join(" ").trim();
   }
-  async processTranscriptionResult(transcript) {
+  async processTranscriptionResult(transcript, savedAudioPath, timestampFileName) {
     if (this.plugin.settings.debugMode) {
       console.log("Processing accepted transcription result:", transcript);
     }
@@ -4201,21 +4227,30 @@ var AudioHandler = class {
       if (this.plugin.settings.keepOriginalTranscription && originalText !== noteContent) {
         noteContent += "\n\n# Raw Notes\n" + originalText;
       }
+      let noteContentWithAudio = "";
+      if (savedAudioPath) {
+        noteContentWithAudio = `![[${savedAudioPath}]]
+
+`;
+      }
+      noteContentWithAudio += noteContent;
       const activeView = this.plugin.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
       const shouldCreateNewFile = this.plugin.settings.createNewFileAfterRecording || !activeView;
       if (shouldCreateNewFile) {
-        const now = /* @__PURE__ */ new Date();
-        const fileName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}.md`;
-        const filePath = `${this.plugin.settings.createNewFileAfterRecordingPath ? `${this.plugin.settings.createNewFileAfterRecordingPath}/` : ""}${fileName}`;
-        await this.plugin.app.vault.create(filePath, noteContent);
+        const fileName = timestampFileName || (() => {
+          const now = /* @__PURE__ */ new Date();
+          return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
+        })();
+        const filePath = `${this.plugin.settings.createNewFileAfterRecordingPath ? `${this.plugin.settings.createNewFileAfterRecordingPath}/` : ""}${fileName}.md`;
+        await this.plugin.app.vault.create(filePath, noteContentWithAudio);
         await this.plugin.app.workspace.openLinkText(filePath, "", true);
         new import_obsidian3.Notice(`Transcription saved to ${filePath}`);
       } else {
         const editor = activeView == null ? void 0 : activeView.editor;
         if (editor) {
           const cursorPosition = editor.getCursor();
-          editor.replaceRange(noteContent, cursorPosition);
-          const noteLines = noteContent.split("\n");
+          editor.replaceRange(noteContentWithAudio, cursorPosition);
+          const noteLines = noteContentWithAudio.split("\n");
           const newPosition = {
             line: cursorPosition.line + noteLines.length - 1,
             ch: noteLines[noteLines.length - 1].length

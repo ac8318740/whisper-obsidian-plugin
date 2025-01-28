@@ -235,6 +235,39 @@ export class AudioHandler {
 		try {
 			this.plugin.statusBar.updateStatus(RecordingStatus.Processing);
 			
+			// Generate timestamp-based filename
+			const now = new Date();
+			const timestampFileName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+			const audioFileName = `${timestampFileName}.wav`;
+			
+			// Save audio file if enabled
+			let savedAudioPath = '';
+			if (this.plugin.settings.saveAudioFile) {
+				try {
+					const arrayBuffer = await audioData.arrayBuffer();
+					const audioFilePath = `${
+						this.plugin.settings.saveAudioFilePath
+							? `${this.plugin.settings.saveAudioFilePath}/`
+							: ""
+					}${audioFileName}`;
+
+					await this.plugin.app.vault.adapter.writeBinary(
+						audioFilePath,
+						new Uint8Array(arrayBuffer)
+					);
+					
+					savedAudioPath = audioFilePath;
+					
+					if (this.plugin.settings.debugMode) {
+						console.log("Audio file saved:", audioFilePath);
+					}
+					new Notice("Audio file saved successfully");
+				} catch (err: any) {
+					console.error("Error saving audio file:", err);
+					new Notice("Error saving audio file: " + err.message);
+				}
+			}
+
 			// Initialize AssemblyAI client if needed
 			if (!this.assemblyClient) {
 				this.initializeAssemblyAI();
@@ -353,7 +386,11 @@ export class AudioHandler {
 
 			// Process the accepted transcription
 			if (transcriptResult) {
-				await this.processTranscriptionResult(transcriptResult);
+				await this.processTranscriptionResult(
+					transcriptResult,
+					savedAudioPath,
+					timestampFileName
+				);
 			}
 
 		} catch (error) {
@@ -396,7 +433,11 @@ export class AudioHandler {
 		return sentences.slice(0, 2).join(' ').trim();
 	}
 
-	private async processTranscriptionResult(transcript: any): Promise<void> {
+	private async processTranscriptionResult(
+		transcript: any, 
+		savedAudioPath?: string,
+		timestampFileName?: string
+	): Promise<void> {
 		if (this.plugin.settings.debugMode) {
 			console.log("Processing accepted transcription result:", transcript);
 		}
@@ -548,28 +589,39 @@ export class AudioHandler {
 				noteContent += "\n\n# Raw Notes\n" + originalText;
 			}
 
+			// When creating the note content, add the audio file link if it was saved
+			let noteContentWithAudio = "";
+			if (savedAudioPath) {
+				noteContentWithAudio = `![[${savedAudioPath}]]\n\n`;
+			}
+			noteContentWithAudio += noteContent;
+
 			// Save or insert the transcription
 			const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
 			const shouldCreateNewFile = this.plugin.settings.createNewFileAfterRecording || !activeView;
 
 			if (shouldCreateNewFile) {
-				const now = new Date();
-				const fileName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}.md`;
+				// If no timestampFileName provided, generate one
+				const fileName = timestampFileName || (() => {
+					const now = new Date();
+					return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+				})();
+
 				const filePath = `${
 					this.plugin.settings.createNewFileAfterRecordingPath
 						? `${this.plugin.settings.createNewFileAfterRecordingPath}/`
 						: ""
-				}${fileName}`;
+				}${fileName}.md`;
 
-				await this.plugin.app.vault.create(filePath, noteContent);
+				await this.plugin.app.vault.create(filePath, noteContentWithAudio);
 				await this.plugin.app.workspace.openLinkText(filePath, "", true);
 				new Notice(`Transcription saved to ${filePath}`);
 			} else {
 				const editor = activeView?.editor;
 				if (editor) {
 					const cursorPosition = editor.getCursor();
-					editor.replaceRange(noteContent, cursorPosition);
-					const noteLines = noteContent.split("\n");
+					editor.replaceRange(noteContentWithAudio, cursorPosition);
+					const noteLines = noteContentWithAudio.split("\n");
 					const newPosition = {
 						line: cursorPosition.line + noteLines.length - 1,
 						ch: noteLines[noteLines.length - 1].length,
