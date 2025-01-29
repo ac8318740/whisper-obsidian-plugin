@@ -168,28 +168,65 @@ export class WhisperSettingsTab extends PluginSettingTab {
 			);
 
 		if (this.plugin.settings.usePostProcessing) {
-			new Setting(containerEl)
-				.setName("Post-Processing Model")
-				.setDesc("Select the model to use for post-processing")
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("gpt-4o", "GPT-4o")
-						.addOption("gpt-4o-mini", "GPT-4o-mini")
-						.addOption("claude-3-5-sonnet-latest", "Claude 3.5 Sonnet")
-						.addOption("claude-3-5-haiku-latest", "Claude 3.5 Haiku")
-						.setValue(this.plugin.settings.postProcessingModel)
+			const modelContainer = containerEl.createDiv();
+			
+			// Add checkbox for custom model input
+			new Setting(modelContainer)
+				.setName("Use Custom Model")
+				.setDesc("Enable to manually enter a model identifier")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.useCustomModel)
 						.onChange(async (value) => {
-							this.plugin.settings.postProcessingModel = value;
+							this.plugin.settings.useCustomModel = value;
 							await this.settingsManager.saveSettings(this.plugin.settings);
-							// Trigger refresh to show/hide API key settings
+							// Trigger refresh to show/hide input/dropdown
 							this.display();
 						})
 				);
 
+			// Add either dropdown or text input based on useCustomModel setting
+			if (this.plugin.settings.useCustomModel) {
+				new Setting(modelContainer)
+					.setName("Post-Processing Model")
+					.setDesc("Enter the model identifier to use for post-processing")
+					.addText((text) =>
+						text
+							.setPlaceholder("Enter model identifier")
+							.setValue(this.plugin.settings.postProcessingModel)
+							.onChange(async (value) => {
+								this.plugin.settings.postProcessingModel = value;
+								await this.settingsManager.saveSettings(this.plugin.settings);
+								// Trigger refresh to show/hide API key settings
+								this.display();
+							})
+					);
+			} else {
+				new Setting(modelContainer)
+					.setName("Post-Processing Model")
+					.setDesc("Select the model to use for post-processing")
+					.addDropdown((dropdown) =>
+						dropdown
+							.addOption("chatgpt-4o-latest", "GPT-4o")
+							.addOption("gpt-4o-mini", "GPT-4o-mini")
+							.addOption("o1", "o1")
+							.addOption("o1-mini", "o1-mini")
+							.addOption("claude-3-5-sonnet-latest", "Claude 3.5 Sonnet")
+							.addOption("claude-3-5-haiku-latest", "Claude 3.5 Haiku")
+							.setValue(this.plugin.settings.postProcessingModel)
+							.onChange(async (value) => {
+								this.plugin.settings.postProcessingModel = value;
+								await this.settingsManager.saveSettings(this.plugin.settings);
+								// Trigger refresh to show/hide API key settings
+								this.display();
+							})
+					);
+			}
+
 			const isAnthropicModel = this.plugin.settings.postProcessingModel.startsWith('claude');
 			
 			if (isAnthropicModel) {
-				new Setting(containerEl)
+				new Setting(modelContainer)
 					.setName("Anthropic API Key")
 					.setDesc("Your Anthropic API key for Claude models")
 					.addText((text) =>
@@ -202,7 +239,7 @@ export class WhisperSettingsTab extends PluginSettingTab {
 							})
 					);
 			} else {
-				new Setting(containerEl)
+				new Setting(modelContainer)
 					.setName("OpenAI API Key")
 					.setDesc("Your OpenAI API key for GPT models")
 					.addText((text) =>
@@ -216,7 +253,7 @@ export class WhisperSettingsTab extends PluginSettingTab {
 					);
 			}
 
-			new Setting(containerEl)
+			new Setting(modelContainer)
 				.setName("Post-Processing Prompt")
 				.setDesc("The prompt to use for post-processing. For AssemblyAI transcripts, include instructions for mapping speaker labels to names.")
 				.addTextArea((text) =>
@@ -230,7 +267,7 @@ export class WhisperSettingsTab extends PluginSettingTab {
 				);
 
 			// Add setting for keeping original transcription
-			new Setting(containerEl)
+			new Setting(modelContainer)
 				.setName("Keep Original Transcription")
 				.setDesc("Include the original transcription (before post-processing) in the output file")
 				.addToggle((toggle) =>

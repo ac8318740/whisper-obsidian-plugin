@@ -513,6 +513,9 @@ export class AudioHandler {
 						}
 
 						const isAnthropicModel = this.plugin.settings.postProcessingModel.startsWith('claude');
+						const isOpenAIModel = this.plugin.settings.postProcessingModel.startsWith('gpt-') || 
+						                     this.plugin.settings.postProcessingModel === 'o1' || 
+						                     this.plugin.settings.postProcessingModel === 'o1-mini';
 						let postProcessResponse;
 
 						if (isAnthropicModel) {
@@ -940,6 +943,9 @@ export class AudioHandler {
 				try {
 					let postProcessResponse;
 					const isAnthropicModel = this.plugin.settings.postProcessingModel.startsWith('claude');
+					const isOpenAIModel = this.plugin.settings.postProcessingModel.startsWith('gpt-') || 
+					                     this.plugin.settings.postProcessingModel === 'o1' || 
+					                     this.plugin.settings.postProcessingModel === 'o1-mini';
 
 					if (isAnthropicModel) {
 						if (!this.plugin.settings.anthropicApiKey) {

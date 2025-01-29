@@ -36,6 +36,7 @@ export interface WhisperSettings {
 	wordBoost: string[]; // Array of words to boost during transcription
 	assemblyAiModel: "best" | "nano";
 	boostParam: "low" | "default" | "high"; // Parameter to control word boost weight
+	useCustomModel: boolean;  // Add new setting for custom model input
 }
 
 export const DEFAULT_SETTINGS: WhisperSettings = {
@@ -72,7 +73,8 @@ export const DEFAULT_SETTINGS: WhisperSettings = {
 	speakerCount: undefined,
 	wordBoost: [], // Default to empty array
 	assemblyAiModel: "best",
-	boostParam: "default" // Default boost parameter
+	boostParam: "default", // Default boost parameter
+	useCustomModel: false,  // Default value for useCustomModel
 };
 
 export class SettingsManager {
