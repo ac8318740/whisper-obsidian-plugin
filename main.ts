@@ -7,6 +7,7 @@ import { SettingsManager, WhisperSettings } from "src/SettingsManager";
 import { NativeAudioRecorder } from "src/AudioRecorder";
 import { RecordingStatus, StatusBar } from "src/StatusBar";
 import { generateTimestampedFileName } from "src/utils";
+import { TempRecordingManager } from "src/TempRecordingManager";
 
 export default class Whisper extends Plugin {
 	settings: WhisperSettings;
@@ -16,6 +17,7 @@ export default class Whisper extends Plugin {
 	audioHandler: AudioHandler;
 	controls: Controls | null = null;
 	statusBar: StatusBar;
+	tempManager: TempRecordingManager;
 
 	async onload() {
 		this.settingsManager = new SettingsManager(this);
@@ -32,11 +34,17 @@ export default class Whisper extends Plugin {
 
 		this.timer = new Timer();
 		this.audioHandler = new AudioHandler(this);
+		this.tempManager = new TempRecordingManager(this);
 		this.recorder = new NativeAudioRecorder(this);
 
 		this.statusBar = new StatusBar(this);
 
 		this.addCommands();
+
+		// Attempt recovery of any previous unsaved recording
+		await this.tempManager.promptAndRecoverIfAny(async (blob, fileName) => {
+			await this.audioHandler.processAudioChunks(blob, fileName);
+		});
 	}
 
 	onunload() {

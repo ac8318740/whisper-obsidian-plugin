@@ -1,5 +1,6 @@
 import { Notice } from "obsidian";
 import Whisper from "main";
+import { TempRecordingManager } from "src/TempRecordingManager";
 
 export interface AudioRecorder {
 	startRecording(): Promise<void>;
@@ -24,6 +25,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 	private recorder: MediaRecorder | null = null;
 	private mimeType: string | undefined;
 	private plugin: Whisper;
+	private tempManager: TempRecordingManager | null = null;
 
 	constructor(plugin: Whisper) {
 		this.plugin = plugin;
@@ -239,9 +241,21 @@ export class NativeAudioRecorder implements AudioRecorder {
 				const options = { mimeType: this.mimeType };
 				const recorder = new MediaRecorder(stream, options);
 
-				recorder.addEventListener("dataavailable", (e: BlobEvent) => {
+				recorder.addEventListener("dataavailable", async (e: BlobEvent) => {
 					console.log("dataavailable", e.data.size);
 					this.chunks.push(e.data);
+					// Persist chunk to temp storage for crash-safety
+					try {
+						if (!this.tempManager && this.mimeType) {
+							this.tempManager = this.plugin.tempManager;
+							await this.tempManager.startSession(this.mimeType);
+						}
+						if (this.tempManager) {
+							await this.tempManager.appendChunk(e.data);
+						}
+					} catch (err) {
+						console.error("Failed to write temp chunk", err);
+					}
 				});
 
 				this.recorder = recorder;
@@ -272,7 +286,11 @@ export class NativeAudioRecorder implements AudioRecorder {
 			if (!this.recorder || this.recorder.state === "inactive") {
 				const blob = new Blob(this.chunks, { type: this.mimeType });
 				this.chunks.length = 0;
-				this.removeSilence(blob).then(resolve);
+				this.removeSilence(blob).then(async (processed) => {
+					// Stop temp session on finalize
+					try { await this.tempManager?.deleteSession(); } catch {}
+					resolve(processed);
+				});
 			} else {
 				this.recorder.addEventListener(
 					"stop",
@@ -290,6 +308,8 @@ export class NativeAudioRecorder implements AudioRecorder {
 						}
 
 						const processedBlob = await this.removeSilence(blob);
+						// Stop temp session on finalize
+						try { await this.tempManager?.deleteSession(); } catch {}
 						resolve(processedBlob);
 					},
 					{ once: true }
