@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting } from "obsidian";
+import { Modal, Notice, Setting } from "obsidian";
 import type Whisper from "../main";
 
 interface TempManifest {
@@ -10,8 +10,9 @@ interface TempManifest {
 export class TempRecordingManager {
 	private plugin: Whisper;
 	private sessionPath: string | null = null;
-	private chunkIndex: number = 0;
-	private mimeType: string = "";
+	private chunkIndex = 0;
+	private mimeType = "";
+	private sessionFilePath: string | null = null;
 
 	constructor(plugin: Whisper) {
 		this.plugin = plugin;
@@ -27,7 +28,11 @@ export class TempRecordingManager {
 
 	private getExtensionFromMime(mime: string): string {
 		const parts = mime.split("/");
-		return parts.length > 1 ? parts[1] : "dat";
+		if (parts.length > 1) {
+			const subtype = parts[1].split(";")[0].trim().toLowerCase();
+			return subtype || "dat";
+		}
+		return "dat";
 	}
 
 	async startSession(mimeType: string): Promise<void> {
@@ -45,6 +50,9 @@ export class TempRecordingManager {
 
 		await adapter.mkdir(this.sessionPath);
 
+		const ext = this.getExtensionFromMime(mimeType);
+		this.sessionFilePath = `${this.sessionPath}/recording.${ext}`;
+
 		const manifest: TempManifest = {
 			mimeType,
 			startedAt: now.toISOString(),
@@ -58,14 +66,17 @@ export class TempRecordingManager {
 	}
 
 	async appendChunk(blob: Blob): Promise<void> {
+		// Deprecated: maintain for compatibility; redirect to snapshot write
+		return this.writeSnapshot(blob);
+	}
+
+	async writeSnapshot(blob: Blob): Promise<void> {
 		if (!this.sessionPath) return;
 		if (!blob || blob.size === 0) return;
 		const adapter = this.plugin.app.vault.adapter;
-		const ext = this.getExtensionFromMime(this.mimeType);
-		const chunkName = `chunk-${String(this.chunkIndex).padStart(6, "0")}.${ext}`;
-		const chunkPath = `${this.sessionPath}/${chunkName}`;
+		const targetPath = this.sessionFilePath || `${this.sessionPath}/recording.${this.getExtensionFromMime(this.mimeType)}`;
 		const arrayBuffer = await blob.arrayBuffer();
-		await adapter.writeBinary(chunkPath, new Uint8Array(arrayBuffer));
+		await adapter.writeBinary(targetPath, new Uint8Array(arrayBuffer));
 		this.chunkIndex += 1;
 
 		// Update manifest chunkCount
@@ -85,7 +96,7 @@ export class TempRecordingManager {
 		const tmpRoot = this.getTmpRootPath();
 		if (!(await adapter.exists(tmpRoot))) return false;
 		const listing = await adapter.list(tmpRoot);
-		return listing.folders.some((f) => f.endsWith("/session-") === false); // any folder is enough
+		return listing.folders.some((f) => f.includes("/session-"));
 	}
 
 	private async findLatestSessionPath(): Promise<string | null> {
@@ -131,8 +142,9 @@ export class TempRecordingManager {
 				}))
 				.addButton((b) => b.setCta().setButtonText("Recover").onClick(async () => {
 					try {
-						const blob = await this.assembleBlobFromSession(sessionPath, manifest!.mimeType);
-						const ext = this.getExtensionFromMime(manifest!.mimeType);
+						const mime = manifest?.mimeType || "audio/webm";
+						const blob = await this.assembleBlobFromSession(sessionPath, mime);
+						const ext = this.getExtensionFromMime(mime);
 						const fileName = this.generateTimestampedName(ext);
 						await process(blob, fileName);
 						await this.deleteSession(sessionPath);
@@ -160,6 +172,13 @@ export class TempRecordingManager {
 
 	private async assembleBlobFromSession(sessionPath: string, mimeType: string): Promise<Blob> {
 		const adapter = this.plugin.app.vault.adapter;
+		const ext = this.getExtensionFromMime(mimeType);
+		const unifiedPath = `${sessionPath}/recording.${ext}`;
+		if (await adapter.exists(unifiedPath)) {
+			const data = await adapter.readBinary(unifiedPath);
+			return new Blob([new Uint8Array(data)], { type: mimeType });
+		}
+		// Fallback to legacy chunk assembly if needed
 		const listing = await adapter.list(sessionPath);
 		const chunks = listing.files
 			.filter((f) => f.includes("/chunk-"))
@@ -173,23 +192,25 @@ export class TempRecordingManager {
 	}
 
 	async deleteSession(path?: string | null): Promise<void> {
-		const adapter = this.plugin.app.vault.adapter;
+		const adapter: any = this.plugin.app.vault.adapter as any;
 		const target = path || this.sessionPath;
 		if (!target) return;
 		try {
-			const listing = await adapter.list(target);
-			for (const f of listing.files) {
-				await adapter.remove(f);
+			if (typeof adapter.rmdir === "function") {
+				await adapter.rmdir(target, true);
+			} else {
+				// Fallback: manually remove contents then remove folder
+				const listing = await adapter.list(target);
+				for (const f of listing.files) {
+					await adapter.remove(f);
+				}
+				for (const d of listing.folders) {
+					await this.deleteSession(d);
+				}
+				await adapter.remove(target);
 			}
-			for (const d of listing.folders) {
-				// Best-effort recursive delete
-				await this.deleteSession(d);
-			}
-			// Finally remove the folder itself
-			// @ts-ignore - remove should handle folders in Obsidian's adapter
-			await adapter.remove(target);
 		} catch (e) {
-			// Ignore failures
+			console.warn("Failed to remove temp session folder", e);
 		}
 		if (!path) {
 			this.sessionPath = null;

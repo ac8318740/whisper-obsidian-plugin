@@ -9,7 +9,7 @@ export interface AudioRecorder {
 }
 
 function getSupportedMimeType(): string | undefined {
-	const mimeTypes = ["audio/mp3", "audio/mp4", "audio/webm", "audio/ogg"];
+	const mimeTypes = ["audio/webm", "audio/ogg", "audio/mp3"];
 
 	for (const mimeType of mimeTypes) {
 		if (MediaRecorder.isTypeSupported(mimeType)) {
@@ -241,6 +241,17 @@ export class NativeAudioRecorder implements AudioRecorder {
 				const options = { mimeType: this.mimeType };
 				const recorder = new MediaRecorder(stream, options);
 
+				// Initialize temp session early so chunks always have a destination
+				try {
+					if (this.mimeType) {
+						this.tempManager = this.plugin.tempManager;
+						// Use WAV snapshots for broad player compatibility
+						await this.tempManager.startSession("audio/wav");
+					}
+				} catch (e) {
+					console.error("Failed to start temp session", e);
+				}
+
 				recorder.addEventListener("dataavailable", async (e: BlobEvent) => {
 					console.log("dataavailable", e.data.size);
 					this.chunks.push(e.data);
@@ -251,7 +262,18 @@ export class NativeAudioRecorder implements AudioRecorder {
 							await this.tempManager.startSession(this.mimeType);
 						}
 						if (this.tempManager) {
-							await this.tempManager.appendChunk(e.data);
+							// Create a WAV snapshot from all chunks so far for better compatibility
+							const fullBlob = new Blob(this.chunks, { type: this.mimeType });
+							try {
+								const audioCtx = new AudioContext();
+								const arrayBuffer = await fullBlob.arrayBuffer();
+								const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+								const wavBlob = await this.encodeWAV(audioBuffer);
+								await this.tempManager.writeSnapshot(wavBlob);
+							} catch (convErr) {
+								console.warn("Failed to create WAV snapshot; writing container snapshot instead", convErr);
+								await this.tempManager.writeSnapshot(fullBlob);
+							}
 						}
 					} catch (err) {
 						console.error("Failed to write temp chunk", err);
@@ -266,7 +288,8 @@ export class NativeAudioRecorder implements AudioRecorder {
 			}
 		}
 
-		this.recorder.start(100);
+		// Use 1000ms timeslice and write rolling snapshot to tmp
+		this.recorder.start(1000);
 	}
 
 	async pauseRecording(): Promise<void> {
@@ -288,7 +311,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 				this.chunks.length = 0;
 				this.removeSilence(blob).then(async (processed) => {
 					// Stop temp session on finalize
-					try { await this.tempManager?.deleteSession(); } catch {}
+					try { await this.tempManager?.deleteSession(); } catch (e) { console.warn("Failed to delete temp session", e); }
 					resolve(processed);
 				});
 			} else {
@@ -309,7 +332,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 
 						const processedBlob = await this.removeSilence(blob);
 						// Stop temp session on finalize
-						try { await this.tempManager?.deleteSession(); } catch {}
+						try { await this.tempManager?.deleteSession(); } catch (e) { console.warn("Failed to delete temp session", e); }
 						resolve(processedBlob);
 					},
 					{ once: true }

@@ -37,7 +37,7 @@ __export(main_exports, {
   default: () => Whisper
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/Timer.ts
 var Timer = class {
@@ -4869,7 +4869,7 @@ var WhisperSettingsTab = class extends import_obsidian5.PluginSettingTab {
         );
       } else {
         new import_obsidian5.Setting(modelContainer).setName("Post-Processing Model").setDesc("Select the model to use for post-processing").addDropdown(
-          (dropdown) => dropdown.addOption("gpt-4o", "GPT-4o").addOption("gpt-4o-mini", "GPT-4o-mini").addOption("o1", "o1").addOption("o1-mini", "o1-mini").addOption("claude-3-5-sonnet-latest", "Claude 3.5 Sonnet").addOption("claude-3-5-haiku-latest", "Claude 3.5 Haiku").setValue(this.plugin.settings.postProcessingModel).onChange(async (value) => {
+          (dropdown) => dropdown.addOption("chatgpt-4o-latest", "GPT-4o").addOption("gpt-4o-mini", "GPT-4o-mini").addOption("o1", "o1").addOption("o1-mini", "o1-mini").addOption("claude-3-5-sonnet-latest", "Claude 3.5 Sonnet").addOption("claude-3-5-haiku-latest", "Claude 3.5 Haiku").setValue(this.plugin.settings.postProcessingModel).onChange(async (value) => {
             this.plugin.settings.postProcessingModel = value;
             await this.settingsManager.saveSettings(this.plugin.settings);
             this.display();
@@ -5130,7 +5130,7 @@ var SettingsManager = class {
 // src/AudioRecorder.ts
 var import_obsidian6 = require("obsidian");
 function getSupportedMimeType() {
-  const mimeTypes = ["audio/mp3", "audio/mp4", "audio/webm", "audio/ogg"];
+  const mimeTypes = ["audio/webm", "audio/ogg", "audio/mp3"];
   for (const mimeType of mimeTypes) {
     if (MediaRecorder.isTypeSupported(mimeType)) {
       return mimeType;
@@ -5142,6 +5142,7 @@ var NativeAudioRecorder = class {
   constructor(plugin) {
     this.chunks = [];
     this.recorder = null;
+    this.tempManager = null;
     this.plugin = plugin;
     this.chunks = [];
     this.recorder = null;
@@ -5313,9 +5314,38 @@ var NativeAudioRecorder = class {
         }
         const options = { mimeType: this.mimeType };
         const recorder = new MediaRecorder(stream, options);
-        recorder.addEventListener("dataavailable", (e) => {
+        try {
+          if (this.mimeType) {
+            this.tempManager = this.plugin.tempManager;
+            await this.tempManager.startSession("audio/wav");
+          }
+        } catch (e) {
+          console.error("Failed to start temp session", e);
+        }
+        recorder.addEventListener("dataavailable", async (e) => {
           console.log("dataavailable", e.data.size);
           this.chunks.push(e.data);
+          try {
+            if (!this.tempManager && this.mimeType) {
+              this.tempManager = this.plugin.tempManager;
+              await this.tempManager.startSession(this.mimeType);
+            }
+            if (this.tempManager) {
+              const fullBlob = new Blob(this.chunks, { type: this.mimeType });
+              try {
+                const audioCtx = new AudioContext();
+                const arrayBuffer = await fullBlob.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                const wavBlob = await this.encodeWAV(audioBuffer);
+                await this.tempManager.writeSnapshot(wavBlob);
+              } catch (convErr) {
+                console.warn("Failed to create WAV snapshot; writing container snapshot instead", convErr);
+                await this.tempManager.writeSnapshot(fullBlob);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to write temp chunk", err);
+          }
         });
         this.recorder = recorder;
       } catch (err) {
@@ -5324,7 +5354,7 @@ var NativeAudioRecorder = class {
         return;
       }
     }
-    this.recorder.start(100);
+    this.recorder.start(1e3);
   }
   async pauseRecording() {
     if (!this.recorder) {
@@ -5341,11 +5371,20 @@ var NativeAudioRecorder = class {
       if (!this.recorder || this.recorder.state === "inactive") {
         const blob = new Blob(this.chunks, { type: this.mimeType });
         this.chunks.length = 0;
-        this.removeSilence(blob).then(resolve);
+        this.removeSilence(blob).then(async (processed) => {
+          var _a2;
+          try {
+            await ((_a2 = this.tempManager) == null ? void 0 : _a2.deleteSession());
+          } catch (e) {
+            console.warn("Failed to delete temp session", e);
+          }
+          resolve(processed);
+        });
       } else {
         this.recorder.addEventListener(
           "stop",
           async () => {
+            var _a2;
             const blob = new Blob(this.chunks, {
               type: this.mimeType
             });
@@ -5355,6 +5394,11 @@ var NativeAudioRecorder = class {
               this.recorder = null;
             }
             const processedBlob = await this.removeSilence(blob);
+            try {
+              await ((_a2 = this.tempManager) == null ? void 0 : _a2.deleteSession());
+            } catch (e) {
+              console.warn("Failed to delete temp session", e);
+            }
             resolve(processedBlob);
           },
           { once: true }
@@ -5412,8 +5456,195 @@ var NativeAudioRecorder = class {
   }
 };
 
+// src/TempRecordingManager.ts
+var import_obsidian7 = require("obsidian");
+var TempRecordingManager = class {
+  constructor(plugin) {
+    this.sessionPath = null;
+    this.chunkIndex = 0;
+    this.mimeType = "";
+    this.sessionFilePath = null;
+    this.plugin = plugin;
+  }
+  getPluginFolderPath() {
+    return `.obsidian/plugins/${this.plugin.manifest.id}`;
+  }
+  getTmpRootPath() {
+    return `${this.getPluginFolderPath()}/tmp`;
+  }
+  getExtensionFromMime(mime) {
+    const parts = mime.split("/");
+    if (parts.length > 1) {
+      const subtype = parts[1].split(";")[0].trim().toLowerCase();
+      return subtype || "dat";
+    }
+    return "dat";
+  }
+  async startSession(mimeType) {
+    this.mimeType = mimeType;
+    const adapter = this.plugin.app.vault.adapter;
+    const tmpRoot = this.getTmpRootPath();
+    if (!await adapter.exists(tmpRoot)) {
+      await adapter.mkdir(tmpRoot);
+    }
+    const now = /* @__PURE__ */ new Date();
+    const sessionId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+    this.sessionPath = `${tmpRoot}/session-${sessionId}`;
+    await adapter.mkdir(this.sessionPath);
+    const ext = this.getExtensionFromMime(mimeType);
+    this.sessionFilePath = `${this.sessionPath}/recording.${ext}`;
+    const manifest = {
+      mimeType,
+      startedAt: now.toISOString(),
+      chunkCount: 0
+    };
+    await adapter.write(
+      `${this.sessionPath}/manifest.json`,
+      JSON.stringify(manifest, null, 2)
+    );
+    this.chunkIndex = 0;
+  }
+  async appendChunk(blob) {
+    return this.writeSnapshot(blob);
+  }
+  async writeSnapshot(blob) {
+    if (!this.sessionPath)
+      return;
+    if (!blob || blob.size === 0)
+      return;
+    const adapter = this.plugin.app.vault.adapter;
+    const targetPath = this.sessionFilePath || `${this.sessionPath}/recording.${this.getExtensionFromMime(this.mimeType)}`;
+    const arrayBuffer = await blob.arrayBuffer();
+    await adapter.writeBinary(targetPath, new Uint8Array(arrayBuffer));
+    this.chunkIndex += 1;
+    try {
+      const manifestPath = `${this.sessionPath}/manifest.json`;
+      const manifestRaw = await adapter.read(manifestPath);
+      const manifest = JSON.parse(manifestRaw);
+      manifest.chunkCount = this.chunkIndex;
+      await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
+    } catch (e) {
+    }
+  }
+  async hasActiveSession() {
+    const adapter = this.plugin.app.vault.adapter;
+    const tmpRoot = this.getTmpRootPath();
+    if (!await adapter.exists(tmpRoot))
+      return false;
+    const listing = await adapter.list(tmpRoot);
+    return listing.folders.some((f) => f.includes("/session-"));
+  }
+  async findLatestSessionPath() {
+    const adapter = this.plugin.app.vault.adapter;
+    const tmpRoot = this.getTmpRootPath();
+    if (!await adapter.exists(tmpRoot))
+      return null;
+    const listing = await adapter.list(tmpRoot);
+    const sessionFolders = listing.folders.filter((f) => f.includes("/session-"));
+    if (sessionFolders.length === 0)
+      return null;
+    sessionFolders.sort((a, b) => a > b ? -1 : 1);
+    return sessionFolders[0];
+  }
+  async promptAndRecoverIfAny(process2) {
+    const sessionPath = await this.findLatestSessionPath();
+    if (!sessionPath)
+      return;
+    let manifest = null;
+    try {
+      const raw = await this.plugin.app.vault.adapter.read(`${sessionPath}/manifest.json`);
+      manifest = JSON.parse(raw);
+    } catch (e) {
+      manifest = { mimeType: "audio/webm", startedAt: (/* @__PURE__ */ new Date()).toISOString(), chunkCount: 0 };
+    }
+    await new Promise((resolve) => {
+      const modal = new import_obsidian7.Modal(this.plugin.app);
+      modal.titleEl.setText("Recover unsaved recording?");
+      const contentEl = modal.contentEl;
+      contentEl.createEl("p", { text: "A previous recording was detected. Would you like to recover and process it now?" });
+      if (manifest == null ? void 0 : manifest.startedAt) {
+        contentEl.createEl("p", { text: `Started at: ${new Date(manifest.startedAt).toLocaleString()}` });
+      }
+      new import_obsidian7.Setting(contentEl).addButton((b) => b.setButtonText("Discard").onClick(async () => {
+        await this.deleteSession(sessionPath);
+        modal.close();
+        resolve();
+      })).addButton((b) => b.setCta().setButtonText("Recover").onClick(async () => {
+        try {
+          const mime = (manifest == null ? void 0 : manifest.mimeType) || "audio/webm";
+          const blob = await this.assembleBlobFromSession(sessionPath, mime);
+          const ext = this.getExtensionFromMime(mime);
+          const fileName = this.generateTimestampedName(ext);
+          await process2(blob, fileName);
+          await this.deleteSession(sessionPath);
+          new import_obsidian7.Notice("Recovered previous recording");
+        } catch (err) {
+          console.error("Recovery failed:", err);
+          new import_obsidian7.Notice("Failed to recover recording: " + err.message);
+        }
+        modal.close();
+        resolve();
+      }));
+      modal.open();
+    });
+  }
+  generateTimestampedName(ext) {
+    const now = /* @__PURE__ */ new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const HH = String(now.getHours()).padStart(2, "0");
+    const MM = String(now.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}_${HH}-${MM}.${ext}`;
+  }
+  async assembleBlobFromSession(sessionPath, mimeType) {
+    const adapter = this.plugin.app.vault.adapter;
+    const ext = this.getExtensionFromMime(mimeType);
+    const unifiedPath = `${sessionPath}/recording.${ext}`;
+    if (await adapter.exists(unifiedPath)) {
+      const data = await adapter.readBinary(unifiedPath);
+      return new Blob([new Uint8Array(data)], { type: mimeType });
+    }
+    const listing = await adapter.list(sessionPath);
+    const chunks = listing.files.filter((f) => f.includes("/chunk-")).sort();
+    const parts = [];
+    for (const f of chunks) {
+      const data = await adapter.readBinary(f);
+      parts.push(new Uint8Array(data));
+    }
+    return new Blob(parts, { type: mimeType });
+  }
+  async deleteSession(path) {
+    const adapter = this.plugin.app.vault.adapter;
+    const target = path || this.sessionPath;
+    if (!target)
+      return;
+    try {
+      if (typeof adapter.rmdir === "function") {
+        await adapter.rmdir(target, true);
+      } else {
+        const listing = await adapter.list(target);
+        for (const f of listing.files) {
+          await adapter.remove(f);
+        }
+        for (const d of listing.folders) {
+          await this.deleteSession(d);
+        }
+        await adapter.remove(target);
+      }
+    } catch (e) {
+      console.warn("Failed to remove temp session folder", e);
+    }
+    if (!path) {
+      this.sessionPath = null;
+      this.chunkIndex = 0;
+      this.mimeType = "";
+    }
+  }
+};
+
 // main.ts
-var Whisper = class extends import_obsidian7.Plugin {
+var Whisper = class extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.controls = null;
@@ -5430,9 +5661,13 @@ var Whisper = class extends import_obsidian7.Plugin {
     this.addSettingTab(new WhisperSettingsTab(this.app, this));
     this.timer = new Timer();
     this.audioHandler = new AudioHandler(this);
+    this.tempManager = new TempRecordingManager(this);
     this.recorder = new NativeAudioRecorder(this);
     this.statusBar = new StatusBar(this);
     this.addCommands();
+    await this.tempManager.promptAndRecoverIfAny(async (blob, fileName) => {
+      await this.audioHandler.processAudioChunks(blob, fileName);
+    });
   }
   onunload() {
     if (this.controls) {
@@ -5507,7 +5742,7 @@ var Whisper = class extends import_obsidian7.Plugin {
       name: "Delete all AssemblyAI transcripts",
       callback: async () => {
         if (this.settings.transcriptionService !== "assemblyai") {
-          new import_obsidian7.Notice("This command is only available when using AssemblyAI as the transcription service");
+          new import_obsidian8.Notice("This command is only available when using AssemblyAI as the transcription service");
           return;
         }
         await this.audioHandler.deleteAllTranscripts();
