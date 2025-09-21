@@ -6,7 +6,7 @@ export class Timer {
 	private isPaused = false;
 	private pausedTime = 0;
 
-	setOnUpdate(callback: () => void): void {
+	setOnUpdate(callback: (() => void) | null): void {
 		this.onUpdate = callback;
 	}
 
@@ -20,7 +20,7 @@ export class Timer {
 						this.onUpdate();
 					}
 				}
-			}, 10);
+			}, 1000); // Update once per second instead of 100x per second
 		}
 	}
 

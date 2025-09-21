@@ -9,6 +9,10 @@ export class Controls extends Modal {
 	private pauseButton: ButtonComponent;
 	private stopButton: ButtonComponent;
 	private timerDisplay: HTMLElement;
+	private dropdownHandler: ((e: Event) => void) | null = null;
+	private customInputHandler: ((e: Event) => void) | null = null;
+	private dropdownElement: HTMLSelectElement | null = null;
+	private customInputElement: HTMLInputElement | null = null;
 
 	constructor(plugin: Whisper) {
 		super(plugin.app);
@@ -166,25 +170,45 @@ export class Controls extends Modal {
 			lang.value === this.plugin.settings.language
 		) ? "" : this.plugin.settings.language;
 
-		// Handle dropdown changes
-		dropdown.addEventListener("change", async () => {
+		// Store references for cleanup
+		this.dropdownElement = dropdown;
+		this.dropdownHandler = async () => {
 			const selectedValue = dropdown.value;
 			customInput.style.display = selectedValue === "" ? "block" : "none";
-			
+
 			if (selectedValue !== "") {
 				this.plugin.settings.language = selectedValue;
 				await this.plugin.settingsManager.saveSettings(this.plugin.settings);
 			}
-		});
+		};
+		dropdown.addEventListener("change", this.dropdownHandler);
 
-		// Handle custom input changes
-		customInput.addEventListener("change", async () => {
+		// Store references for cleanup
+		this.customInputElement = customInput;
+		this.customInputHandler = async () => {
 			if (customInput.value) {
 				this.plugin.settings.language = customInput.value;
 				await this.plugin.settingsManager.saveSettings(this.plugin.settings);
 			}
-		});
+		};
+		customInput.addEventListener("change", this.customInputHandler);
 
 		this.resetGUI();
+	}
+
+	onClose() {
+		// Clean up event listeners to prevent memory leaks
+		if (this.dropdownElement && this.dropdownHandler) {
+			this.dropdownElement.removeEventListener("change", this.dropdownHandler);
+		}
+		if (this.customInputElement && this.customInputHandler) {
+			this.customInputElement.removeEventListener("change", this.customInputHandler);
+		}
+
+		// Clean up timer callback to prevent updates when modal is closed
+		this.plugin.timer.setOnUpdate(null);
+
+		// Call parent onClose
+		super.onClose();
 	}
 }

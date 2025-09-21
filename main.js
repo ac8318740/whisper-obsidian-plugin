@@ -62,7 +62,7 @@ var Timer = class {
             this.onUpdate();
           }
         }
-      }, 10);
+      }, 1e3);
     }
   }
   pause() {
@@ -170,6 +170,10 @@ function generateTimestampedFileName(extension) {
 var Controls = class extends import_obsidian.Modal {
   constructor(plugin) {
     super(plugin.app);
+    this.dropdownHandler = null;
+    this.customInputHandler = null;
+    this.dropdownElement = null;
+    this.customInputElement = null;
     this.plugin = plugin;
     this.containerEl.addClass("recording-controls");
     this.plugin.timer.setOnUpdate(() => {
@@ -276,21 +280,35 @@ var Controls = class extends import_obsidian.Modal {
     customInput.value = commonLanguages.some(
       (lang) => lang.value === this.plugin.settings.language
     ) ? "" : this.plugin.settings.language;
-    dropdown.addEventListener("change", async () => {
+    this.dropdownElement = dropdown;
+    this.dropdownHandler = async () => {
       const selectedValue = dropdown.value;
       customInput.style.display = selectedValue === "" ? "block" : "none";
       if (selectedValue !== "") {
         this.plugin.settings.language = selectedValue;
         await this.plugin.settingsManager.saveSettings(this.plugin.settings);
       }
-    });
-    customInput.addEventListener("change", async () => {
+    };
+    dropdown.addEventListener("change", this.dropdownHandler);
+    this.customInputElement = customInput;
+    this.customInputHandler = async () => {
       if (customInput.value) {
         this.plugin.settings.language = customInput.value;
         await this.plugin.settingsManager.saveSettings(this.plugin.settings);
       }
-    });
+    };
+    customInput.addEventListener("change", this.customInputHandler);
     this.resetGUI();
+  }
+  onClose() {
+    if (this.dropdownElement && this.dropdownHandler) {
+      this.dropdownElement.removeEventListener("change", this.dropdownHandler);
+    }
+    if (this.customInputElement && this.customInputHandler) {
+      this.customInputElement.removeEventListener("change", this.customInputHandler);
+    }
+    this.plugin.timer.setOnUpdate(null);
+    super.onClose();
   }
 };
 
@@ -5129,6 +5147,57 @@ var SettingsManager = class {
 
 // src/AudioRecorder.ts
 var import_obsidian6 = require("obsidian");
+
+// src/AudioContextManager.ts
+var _AudioContextManager = class {
+  constructor() {
+    this.context = null;
+    this.refCount = 0;
+  }
+  static getInstance() {
+    if (!_AudioContextManager.instance) {
+      _AudioContextManager.instance = new _AudioContextManager();
+    }
+    return _AudioContextManager.instance;
+  }
+  async getContext() {
+    if (!this.context || this.context.state === "closed") {
+      this.context = new AudioContext();
+    }
+    this.refCount++;
+    return this.context;
+  }
+  async releaseContext() {
+    this.refCount--;
+    if (this.refCount <= 0 && this.context && this.context.state !== "closed") {
+      await this.context.close();
+      this.context = null;
+      this.refCount = 0;
+    }
+  }
+  async forceClose() {
+    if (this.context && this.context.state !== "closed") {
+      await this.context.close();
+    }
+    this.context = null;
+    this.refCount = 0;
+  }
+  /**
+   * Safely executes a function with an AudioContext and ensures cleanup
+   */
+  async withContext(callback) {
+    const ctx = await this.getContext();
+    try {
+      return await callback(ctx);
+    } finally {
+      await this.releaseContext();
+    }
+  }
+};
+var AudioContextManager = _AudioContextManager;
+AudioContextManager.instance = null;
+
+// src/AudioRecorder.ts
 function getSupportedMimeType() {
   const mimeTypes = ["audio/webm", "audio/ogg", "audio/mp3"];
   for (const mimeType of mimeTypes) {
@@ -5143,6 +5212,7 @@ var NativeAudioRecorder = class {
     this.chunks = [];
     this.recorder = null;
     this.tempManager = null;
+    this.lastChunkIndex = 0;
     this.plugin = plugin;
     this.chunks = [];
     this.recorder = null;
@@ -5161,8 +5231,9 @@ var NativeAudioRecorder = class {
       }
       return inputBlob;
     }
+    const contextManager = AudioContextManager.getInstance();
     try {
-      const audioCtx = new AudioContext();
+      const audioCtx = await contextManager.getContext();
       const arrayBuffer = await inputBlob.arrayBuffer();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       const threshold = Math.pow(10, this.plugin.settings.silenceThreshold / 20);
@@ -5252,7 +5323,8 @@ var NativeAudioRecorder = class {
         const newDuration = totalLength / audioBuffer.sampleRate;
         console.log(`Compressed silence in audio from ${originalDuration.toFixed(1)}s to ${newDuration.toFixed(1)}s`);
         new import_obsidian6.Notice(`Compressed ${segments.filter((s) => s.isSilence).length} silence segments from ${originalDuration.toFixed(1)}s to ${newDuration.toFixed(1)}s`);
-        return await this.encodeWAV(trimmedBuffer);
+        const result = await this.encodeWAV(trimmedBuffer);
+        return result;
       } else {
         let startIndex = 0;
         let endIndex = audioBuffer.length - 1;
@@ -5287,12 +5359,15 @@ var NativeAudioRecorder = class {
         const removedSeconds = (audioBuffer.length - trimmedLength) / audioBuffer.sampleRate;
         console.log(`Removed ${removedSeconds.toFixed(1)} seconds of leading/trailing silence`);
         new import_obsidian6.Notice(`Removed ${removedSeconds.toFixed(1)} seconds of leading/trailing silence`);
-        return await this.encodeWAV(trimmedBuffer);
+        const result = await this.encodeWAV(trimmedBuffer);
+        return result;
       }
     } catch (error) {
       console.error("AudioContext processing error:", error);
       new import_obsidian6.Notice("Error processing audio: " + error);
       return inputBlob;
+    } finally {
+      await contextManager.releaseContext();
     }
   }
   getRecordingState() {
@@ -5330,18 +5405,9 @@ var NativeAudioRecorder = class {
               this.tempManager = this.plugin.tempManager;
               await this.tempManager.startSession(this.mimeType);
             }
-            if (this.tempManager) {
-              const fullBlob = new Blob(this.chunks, { type: this.mimeType });
-              try {
-                const audioCtx = new AudioContext();
-                const arrayBuffer = await fullBlob.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                const wavBlob = await this.encodeWAV(audioBuffer);
-                await this.tempManager.writeSnapshot(wavBlob);
-              } catch (convErr) {
-                console.warn("Failed to create WAV snapshot; writing container snapshot instead", convErr);
-                await this.tempManager.writeSnapshot(fullBlob);
-              }
+            if (this.tempManager && e.data.size > 0) {
+              await this.tempManager.appendChunk(e.data, this.lastChunkIndex);
+              this.lastChunkIndex++;
             }
           } catch (err) {
             console.error("Failed to write temp chunk", err);
@@ -5371,6 +5437,7 @@ var NativeAudioRecorder = class {
       if (!this.recorder || this.recorder.state === "inactive") {
         const blob = new Blob(this.chunks, { type: this.mimeType });
         this.chunks.length = 0;
+        this.lastChunkIndex = 0;
         this.removeSilence(blob).then(async (processed) => {
           var _a2;
           try {
@@ -5389,6 +5456,7 @@ var NativeAudioRecorder = class {
               type: this.mimeType
             });
             this.chunks.length = 0;
+            this.lastChunkIndex = 0;
             if (this.recorder) {
               this.recorder.stream.getTracks().forEach((track) => track.stop());
               this.recorder = null;
@@ -5504,8 +5572,30 @@ var TempRecordingManager = class {
     );
     this.chunkIndex = 0;
   }
-  async appendChunk(blob) {
+  async appendChunk(blob, chunkIndex) {
+    if (chunkIndex !== void 0) {
+      return this.writeIncrementalChunk(blob, chunkIndex);
+    }
     return this.writeSnapshot(blob);
+  }
+  async writeIncrementalChunk(blob, chunkIndex) {
+    if (!this.sessionPath)
+      return;
+    if (!blob || blob.size === 0)
+      return;
+    const adapter = this.plugin.app.vault.adapter;
+    const chunkPath = `${this.sessionPath}/chunk-${String(chunkIndex).padStart(4, "0")}.dat`;
+    const arrayBuffer = await blob.arrayBuffer();
+    await adapter.writeBinary(chunkPath, new Uint8Array(arrayBuffer));
+    try {
+      const manifestPath = `${this.sessionPath}/manifest.json`;
+      const manifestRaw = await adapter.read(manifestPath);
+      const manifest = JSON.parse(manifestRaw);
+      manifest.chunkCount = Math.max(manifest.chunkCount, chunkIndex + 1);
+      await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
+    } catch (e) {
+      console.error("Failed to update manifest", e);
+    }
   }
   async writeSnapshot(blob) {
     if (!this.sessionPath)
@@ -5599,20 +5689,87 @@ var TempRecordingManager = class {
   }
   async assembleBlobFromSession(sessionPath, mimeType) {
     const adapter = this.plugin.app.vault.adapter;
+    const listing = await adapter.list(sessionPath);
+    const chunks = listing.files.filter((f) => f.includes("/chunk-")).sort();
+    if (chunks.length > 0) {
+      const parts = [];
+      for (const chunkFile of chunks) {
+        const data = await adapter.readBinary(chunkFile);
+        parts.push(new Uint8Array(data));
+      }
+      const rawBlob = new Blob(parts, { type: mimeType });
+      if (mimeType !== "audio/wav") {
+        try {
+          const contextManager = AudioContextManager.getInstance();
+          const audioCtx = await contextManager.getContext();
+          try {
+            const arrayBuffer = await rawBlob.arrayBuffer();
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const wavBlob = await this.encodeWAV(audioBuffer);
+            return wavBlob;
+          } finally {
+            await contextManager.releaseContext();
+          }
+        } catch (e) {
+          console.warn("Failed to convert to WAV on recovery, using original", e);
+          return rawBlob;
+        }
+      }
+      return rawBlob;
+    }
     const ext = this.getExtensionFromMime(mimeType);
     const unifiedPath = `${sessionPath}/recording.${ext}`;
     if (await adapter.exists(unifiedPath)) {
       const data = await adapter.readBinary(unifiedPath);
       return new Blob([new Uint8Array(data)], { type: mimeType });
     }
-    const listing = await adapter.list(sessionPath);
-    const chunks = listing.files.filter((f) => f.includes("/chunk-")).sort();
-    const parts = [];
-    for (const f of chunks) {
-      const data = await adapter.readBinary(f);
-      parts.push(new Uint8Array(data));
+    throw new Error("No recording data found in session");
+  }
+  /**
+   * Utility: Re-encode an AudioBuffer as a 16-bit .wav Blob.
+   * Copied from AudioRecorder for use in recovery scenarios.
+   */
+  async encodeWAV(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1;
+    const bitsPerSample = 16;
+    const channelData = [];
+    const length = buffer.length * numChannels * 2;
+    for (let i = 0; i < numChannels; i++) {
+      channelData.push(buffer.getChannelData(i));
     }
-    return new Blob(parts, { type: mimeType });
+    const bufferSize = 44 + length;
+    const wavBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(wavBuffer);
+    this.writeString(view, 0, "RIFF");
+    view.setUint32(4, 36 + length, true);
+    this.writeString(view, 8, "WAVE");
+    this.writeString(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+    view.setUint16(32, numChannels * bitsPerSample / 8, true);
+    view.setUint16(34, bitsPerSample, true);
+    this.writeString(view, 36, "data");
+    view.setUint32(40, length, true);
+    let offset = 44;
+    for (let i = 0; i < buffer.length; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const sample = channelData[ch][i];
+        const clamped = Math.max(-1, Math.min(1, sample));
+        view.setInt16(offset, clamped < 0 ? clamped * 32768 : clamped * 32767, true);
+        offset += 2;
+      }
+    }
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  }
+  writeString(view, offset, text) {
+    for (let i = 0; i < text.length; i++) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
   }
   async deleteSession(path) {
     const adapter = this.plugin.app.vault.adapter;
@@ -5639,6 +5796,7 @@ var TempRecordingManager = class {
       this.sessionPath = null;
       this.chunkIndex = 0;
       this.mimeType = "";
+      this.sessionFilePath = null;
     }
   }
 };
@@ -5674,6 +5832,9 @@ var Whisper = class extends import_obsidian8.Plugin {
       this.controls.close();
     }
     this.statusBar.remove();
+    this.timer.reset();
+    AudioContextManager.getInstance().forceClose();
+    this.tempManager.deleteSession();
   }
   addCommands() {
     this.addCommand({

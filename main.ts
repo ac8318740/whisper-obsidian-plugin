@@ -8,6 +8,7 @@ import { NativeAudioRecorder } from "src/AudioRecorder";
 import { RecordingStatus, StatusBar } from "src/StatusBar";
 import { generateTimestampedFileName } from "src/utils";
 import { TempRecordingManager } from "src/TempRecordingManager";
+import { AudioContextManager } from "src/AudioContextManager";
 
 export default class Whisper extends Plugin {
 	settings: WhisperSettings;
@@ -53,6 +54,15 @@ export default class Whisper extends Plugin {
 		}
 
 		this.statusBar.remove();
+
+		// Clean up timer
+		this.timer.reset();
+
+		// Force close any lingering AudioContexts
+		AudioContextManager.getInstance().forceClose();
+
+		// Clean up temp recordings
+		this.tempManager.deleteSession();
 	}
 
 	addCommands() {

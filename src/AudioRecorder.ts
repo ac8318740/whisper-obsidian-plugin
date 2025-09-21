@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import Whisper from "main";
 import { TempRecordingManager } from "src/TempRecordingManager";
+import { AudioContextManager } from "src/AudioContextManager";
 
 export interface AudioRecorder {
 	startRecording(): Promise<void>;
@@ -26,6 +27,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 	private mimeType: string | undefined;
 	private plugin: Whisper;
 	private tempManager: TempRecordingManager | null = null;
+	private lastChunkIndex: number = 0;
 
 	constructor(plugin: Whisper) {
 		this.plugin = plugin;
@@ -48,8 +50,9 @@ export class NativeAudioRecorder implements AudioRecorder {
 			return inputBlob;
 		}
 
+		const contextManager = AudioContextManager.getInstance();
 		try {
-			const audioCtx = new AudioContext();
+			const audioCtx = await contextManager.getContext();
 			const arrayBuffer = await inputBlob.arrayBuffer();
 			const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer); 
 			const threshold = Math.pow(10, this.plugin.settings.silenceThreshold / 20);
@@ -164,7 +167,8 @@ export class NativeAudioRecorder implements AudioRecorder {
 				console.log(`Compressed silence in audio from ${originalDuration.toFixed(1)}s to ${newDuration.toFixed(1)}s`);
 				new Notice(`Compressed ${segments.filter(s => s.isSilence).length} silence segments from ${originalDuration.toFixed(1)}s to ${newDuration.toFixed(1)}s`);
 
-				return await this.encodeWAV(trimmedBuffer);
+				const result = await this.encodeWAV(trimmedBuffer);
+				return result;
 
 			} else {
 				// Original behavior: only remove leading/trailing silence
@@ -208,13 +212,17 @@ export class NativeAudioRecorder implements AudioRecorder {
 				console.log(`Removed ${removedSeconds.toFixed(1)} seconds of leading/trailing silence`);
 				new Notice(`Removed ${removedSeconds.toFixed(1)} seconds of leading/trailing silence`);
 
-				return await this.encodeWAV(trimmedBuffer);
+				const result = await this.encodeWAV(trimmedBuffer);
+				return result;
 			}
 
 		} catch (error) {
 			console.error("AudioContext processing error:", error);
 			new Notice("Error processing audio: " + error);
 			return inputBlob;
+		} finally {
+			// CRITICAL: Always release the AudioContext
+			await contextManager.releaseContext();
 		}
 	}
 
@@ -255,25 +263,17 @@ export class NativeAudioRecorder implements AudioRecorder {
 				recorder.addEventListener("dataavailable", async (e: BlobEvent) => {
 					console.log("dataavailable", e.data.size);
 					this.chunks.push(e.data);
-					// Persist chunk to temp storage for crash-safety
+
+					// Only write the NEW chunk to temp storage (not all chunks!)
 					try {
 						if (!this.tempManager && this.mimeType) {
 							this.tempManager = this.plugin.tempManager;
 							await this.tempManager.startSession(this.mimeType);
 						}
-						if (this.tempManager) {
-							// Create a WAV snapshot from all chunks so far for better compatibility
-							const fullBlob = new Blob(this.chunks, { type: this.mimeType });
-							try {
-								const audioCtx = new AudioContext();
-								const arrayBuffer = await fullBlob.arrayBuffer();
-								const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-								const wavBlob = await this.encodeWAV(audioBuffer);
-								await this.tempManager.writeSnapshot(wavBlob);
-							} catch (convErr) {
-								console.warn("Failed to create WAV snapshot; writing container snapshot instead", convErr);
-								await this.tempManager.writeSnapshot(fullBlob);
-							}
+						if (this.tempManager && e.data.size > 0) {
+							// Write only the new chunk, not all chunks - this prevents exponential CPU usage
+							await this.tempManager.appendChunk(e.data, this.lastChunkIndex);
+							this.lastChunkIndex++;
 						}
 					} catch (err) {
 						console.error("Failed to write temp chunk", err);
@@ -309,6 +309,8 @@ export class NativeAudioRecorder implements AudioRecorder {
 			if (!this.recorder || this.recorder.state === "inactive") {
 				const blob = new Blob(this.chunks, { type: this.mimeType });
 				this.chunks.length = 0;
+				this.lastChunkIndex = 0;
+
 				this.removeSilence(blob).then(async (processed) => {
 					// Stop temp session on finalize
 					try { await this.tempManager?.deleteSession(); } catch (e) { console.warn("Failed to delete temp session", e); }
@@ -322,6 +324,7 @@ export class NativeAudioRecorder implements AudioRecorder {
 							type: this.mimeType,
 						});
 						this.chunks.length = 0;
+						this.lastChunkIndex = 0;
 
 						if (this.recorder) {
 							this.recorder.stream

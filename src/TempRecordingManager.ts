@@ -1,5 +1,6 @@
 import { Modal, Notice, Setting } from "obsidian";
 import type Whisper from "../main";
+import { AudioContextManager } from "src/AudioContextManager";
 
 interface TempManifest {
 	mimeType: string;
@@ -65,9 +66,34 @@ export class TempRecordingManager {
 		this.chunkIndex = 0;
 	}
 
-	async appendChunk(blob: Blob): Promise<void> {
-		// Deprecated: maintain for compatibility; redirect to snapshot write
+	async appendChunk(blob: Blob, chunkIndex?: number): Promise<void> {
+		// Handle incremental chunk writing for improved performance
+		if (chunkIndex !== undefined) {
+			return this.writeIncrementalChunk(blob, chunkIndex);
+		}
+		// Fallback to old behavior for compatibility
 		return this.writeSnapshot(blob);
+	}
+
+	private async writeIncrementalChunk(blob: Blob, chunkIndex: number): Promise<void> {
+		if (!this.sessionPath) return;
+		if (!blob || blob.size === 0) return;
+
+		const adapter = this.plugin.app.vault.adapter;
+		const chunkPath = `${this.sessionPath}/chunk-${String(chunkIndex).padStart(4, '0')}.dat`;
+		const arrayBuffer = await blob.arrayBuffer();
+		await adapter.writeBinary(chunkPath, new Uint8Array(arrayBuffer));
+
+		// Update manifest
+		try {
+			const manifestPath = `${this.sessionPath}/manifest.json`;
+			const manifestRaw = await adapter.read(manifestPath);
+			const manifest = JSON.parse(manifestRaw) as TempManifest;
+			manifest.chunkCount = Math.max(manifest.chunkCount, chunkIndex + 1);
+			await adapter.write(manifestPath, JSON.stringify(manifest, null, 2));
+		} catch (e) {
+			console.error("Failed to update manifest", e);
+		}
 	}
 
 	async writeSnapshot(blob: Blob): Promise<void> {
@@ -172,23 +198,114 @@ export class TempRecordingManager {
 
 	private async assembleBlobFromSession(sessionPath: string, mimeType: string): Promise<Blob> {
 		const adapter = this.plugin.app.vault.adapter;
+		const listing = await adapter.list(sessionPath);
+
+		// Look for chunk files first (new incremental format)
+		const chunks = listing.files
+			.filter((f) => f.includes("/chunk-"))
+			.sort(); // Sorts lexicographically, which works with padded numbers
+
+		if (chunks.length > 0) {
+			// Assemble from chunks
+			const parts: Uint8Array[] = [];
+			for (const chunkFile of chunks) {
+				const data = await adapter.readBinary(chunkFile);
+				parts.push(new Uint8Array(data));
+			}
+			const rawBlob = new Blob(parts, { type: mimeType });
+
+			// Convert to WAV for recovery if needed - this ensures compatibility
+			if (mimeType !== "audio/wav") {
+				try {
+					const contextManager = AudioContextManager.getInstance();
+					const audioCtx = await contextManager.getContext();
+					try {
+						const arrayBuffer = await rawBlob.arrayBuffer();
+						const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+						const wavBlob = await this.encodeWAV(audioBuffer);
+						return wavBlob;
+					} finally {
+						await contextManager.releaseContext();
+					}
+				} catch (e) {
+					console.warn("Failed to convert to WAV on recovery, using original", e);
+					return rawBlob;
+				}
+			}
+			return rawBlob;
+		}
+
+		// Fallback to legacy single file if exists
 		const ext = this.getExtensionFromMime(mimeType);
 		const unifiedPath = `${sessionPath}/recording.${ext}`;
 		if (await adapter.exists(unifiedPath)) {
 			const data = await adapter.readBinary(unifiedPath);
 			return new Blob([new Uint8Array(data)], { type: mimeType });
 		}
-		// Fallback to legacy chunk assembly if needed
-		const listing = await adapter.list(sessionPath);
-		const chunks = listing.files
-			.filter((f) => f.includes("/chunk-"))
-			.sort();
-		const parts: Uint8Array[] = [];
-		for (const f of chunks) {
-			const data = await adapter.readBinary(f);
-			parts.push(new Uint8Array(data));
+
+		throw new Error("No recording data found in session");
+	}
+
+	/**
+	 * Utility: Re-encode an AudioBuffer as a 16-bit .wav Blob.
+	 * Copied from AudioRecorder for use in recovery scenarios.
+	 */
+	private async encodeWAV(buffer: AudioBuffer): Promise<Blob> {
+		const numChannels = buffer.numberOfChannels;
+		const sampleRate = buffer.sampleRate;
+		const format = 1; // PCM
+		const bitsPerSample = 16;
+
+		// Combine channels
+		const channelData: Float32Array[] = [];
+		const length = buffer.length * numChannels * 2; // 2 bytes per sample
+		for (let i = 0; i < numChannels; i++) {
+			channelData.push(buffer.getChannelData(i));
 		}
-		return new Blob(parts, { type: mimeType });
+
+		// WAV header 44 bytes + PCM data
+		const bufferSize = 44 + length;
+		const wavBuffer = new ArrayBuffer(bufferSize);
+		const view = new DataView(wavBuffer);
+
+		// RIFF chunk descriptor
+		this.writeString(view, 0, "RIFF");
+		view.setUint32(4, 36 + length, true); // file size minus 8
+		this.writeString(view, 8, "WAVE");
+
+		// fmt sub-chunk
+		this.writeString(view, 12, "fmt ");
+		view.setUint32(16, 16, true); // Subchunk1Size for PCM
+		view.setUint16(20, format, true);
+		view.setUint16(22, numChannels, true);
+		view.setUint32(24, sampleRate, true);
+		view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+		view.setUint16(32, numChannels * bitsPerSample / 8, true);
+		view.setUint16(34, bitsPerSample, true);
+
+		// data sub-chunk
+		this.writeString(view, 36, "data");
+		view.setUint32(40, length, true);
+
+		// Write PCM
+		let offset = 44;
+		for (let i = 0; i < buffer.length; i++) {
+			for (let ch = 0; ch < numChannels; ch++) {
+				const sample = channelData[ch][i];
+				// clamp to 16-bit
+				const clamped = Math.max(-1, Math.min(1, sample));
+				view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF, true);
+				offset += 2;
+			}
+		}
+
+		return new Blob([wavBuffer], { type: "audio/wav" });
+	}
+
+	private writeString(view: DataView, offset: number, text: string) {
+		for (let i = 0; i < text.length; i++) {
+			view.setUint8(offset + i, text.charCodeAt(i));
+		}
 	}
 
 	async deleteSession(path?: string | null): Promise<void> {
@@ -216,6 +333,7 @@ export class TempRecordingManager {
 			this.sessionPath = null;
 			this.chunkIndex = 0;
 			this.mimeType = "";
+			this.sessionFilePath = null;
 		}
 	}
 }
